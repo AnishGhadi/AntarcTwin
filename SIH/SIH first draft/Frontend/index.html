@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Antarctic Stations Digital Twin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    --nominal: #1D9E75; --warning: #EF9F27; --critical: #E24B4A; --unknown: #888780;
+    --bg: #0f1115; --card: #1a1d24; --border: #2a2e37; --text: #e8e9ec; --muted: #9a9da5;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, Segoe UI, sans-serif; background: var(--bg); color: var(--text); }
+  header { padding: 20px 28px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  #conn-status { font-size: 13px; color: var(--muted); }
+  #conn-status.connected { color: var(--nominal); }
+  main { padding: 24px 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  .station-panel { grid-column: span 1; }
+  .station-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; margin-bottom: 18px; }
+  .station-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .station-header h2 { margin: 0; font-size: 17px; }
+  .badge { padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+  .badge.nominal { background: rgba(29,158,117,0.15); color: var(--nominal); }
+  .badge.warning { background: rgba(239,159,39,0.15); color: var(--warning); }
+  .badge.critical { background: rgba(226,75,74,0.15); color: var(--critical); }
+  .badge.unknown { background: rgba(136,135,128,0.15); color: var(--unknown); }
+  .subsystems { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .subsystem { background: #14161c; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .subsystem-title { font-size: 12px; color: var(--muted); text-transform: uppercase; margin-bottom: 6px; display: flex; justify-content: space-between; }
+  .metric { font-size: 13px; margin: 2px 0; }
+  .metric span { color: var(--muted); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 5px; }
+  .dot.nominal { background: var(--nominal); } .dot.warning { background: var(--warning); }
+  .dot.critical { background: var(--critical); } .dot.unknown { background: var(--unknown); }
+  #alerts-panel { grid-column: span 2; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  #alerts-panel h2 { margin: 0 0 12px; font-size: 16px; }
+  .alert-row { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .alert-row:last-child { border-bottom: none; }
+  .forecast-panel { grid-column: span 2; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px; }
+  canvas { max-height: 220px; }
+  select { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Antarctic Stations Digital Twin</h1>
+  <span id="conn-status">connecting...</span>
+</header>
+
+<main>
+  <div class="station-panel" id="station-maitri"></div>
+  <div class="station-panel" id="station-bharati"></div>
+
+  <div id="alerts-panel">
+    <h2>Active alerts</h2>
+    <div id="alerts-list">No alerts yet.</div>
+  </div>
+
+  <div class="forecast-panel">
+    <h2 style="margin:0 0 12px;font-size:16px;">Fuel forecast &mdash;
+      <select id="forecast-station">
+        <option value="maitri">Maitri</option>
+        <option value="bharati">Bharati</option>
+      </select>
+    </h2>
+    <canvas id="fuel-chart"></canvas>
+  </div>
+</main>
+
+<script>
+const API_BASE = "http://localhost:8000";
+const WS_URL = "ws://localhost:8000/ws";
+
+const statusOrder = { critical: 3, warning: 2, nominal: 1, unknown: 0 };
+
+function renderStation(station) {
+  const el = document.getElementById(`station-${station.station_id}`);
+  const subsystemsHtml = Object.entries(station.subsystems).map(([name, s]) => {
+    const d = s.data || {};
+    let lines = "";
+    if (name === "energy") {
+      lines = `<div class="metric"><span>load</span> ${d.load_kw ?? "-"} kW</div>
+                <div class="metric"><span>solar</span> ${d.solar_kw ?? "-"} kW &nbsp; <span>wind</span> ${d.wind_kw ?? "-"} kW</div>
+                <div class="metric"><span>diesel</span> ${d.diesel_kw ?? "-"} kW (${d.generator_status ?? "-"})</div>`;
+    } else if (name === "fuel") {
+      lines = `<div class="metric"><span>level</span> ${d.fuel_pct ?? "-"}%</div>
+                <div class="metric"><span>days left</span> ${d.est_days_remaining ?? "-"}</div>`;
+    } else if (name === "environment") {
+      lines = `<div class="metric"><span>temp</span> ${d.temperature_c ?? "-"}&deg;C</div>
+                <div class="metric"><span>wind</span> ${d.wind_speed_kmh ?? "-"} km/h</div>`;
+    } else if (name === "infrastructure") {
+      lines = `<div class="metric"><span>structural</span> ${d.structural_health_index ?? "-"}</div>
+                <div class="metric"><span>comms</span> ${d.comms_link_status ?? "-"}</div>`;
+    }
+    return `<div class="subsystem">
+      <div class="subsystem-title"><span><span class="dot ${s.status}"></span>${name}</span></div>
+      ${lines}
+    </div>`;
+  }).join("");
+
+  el.innerHTML = `<div class="station-card">
+    <div class="station-header">
+      <h2>${station.display_name}</h2>
+      <span class="badge ${station.overall_status}">${station.overall_status}</span>
+    </div>
+    <div class="subsystems">${subsystemsHtml}</div>
+  </div>`;
+}
+
+function renderAlerts(alerts) {
+  const el = document.getElementById("alerts-list");
+  if (!alerts.length) { el.innerHTML = "No active alerts."; return; }
+  el.innerHTML = alerts.map(a => `
+    <div class="alert-row">
+      <span class="badge ${a.severity}">${a.severity}</span>
+      <span>${a.message}</span>
+      <span style="margin-left:auto;color:var(--muted)">${a.station_id} / ${a.subsystem}</span>
+    </div>`).join("");
+}
+
+async function refreshAlerts() {
+  try {
+    const res = await fetch(`${API_BASE}/api/alerts`);
+    renderAlerts(await res.json());
+  } catch (e) { console.error("alerts fetch failed", e); }
+}
+
+let fuelChart;
+async function refreshForecast() {
+  const stationId = document.getElementById("forecast-station").value;
+  try {
+    const res = await fetch(`${API_BASE}/api/stations/${stationId}/forecast/fuel?steps=12`);
+    const data = await res.json();
+    const labels = data.fuel_level_forecast.map((_, i) => `+${i + 1}`);
+    if (fuelChart) fuelChart.destroy();
+    const ctx = document.getElementById("fuel-chart").getContext("2d");
+    fuelChart = new Chart(ctx, {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          label: "Forecast fuel level (L)",
+          data: data.fuel_level_forecast,
+          borderColor: "#EF9F27",
+          backgroundColor: "rgba(239,159,39,0.1)",
+          tension: 0.3,
+        }],
+      },
+      options: {
+        plugins: { legend: { labels: { color: "#e8e9ec" } } },
+        scales: {
+          x: { ticks: { color: "#9a9da5" }, grid: { color: "#2a2e37" } },
+          y: { ticks: { color: "#9a9da5" }, grid: { color: "#2a2e37" } },
+        },
+      },
+    });
+  } catch (e) { console.error("forecast fetch failed", e); }
+}
+
+document.getElementById("forecast-station").addEventListener("change", refreshForecast);
+
+function connectWebSocket() {
+  const ws = new WebSocket(WS_URL);
+  const statusEl = document.getElementById("conn-status");
+
+  ws.onopen = () => { statusEl.textContent = "live"; statusEl.classList.add("connected"); };
+  ws.onclose = () => {
+    statusEl.textContent = "disconnected - retrying...";
+    statusEl.classList.remove("connected");
+    setTimeout(connectWebSocket, 2000);
+  };
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === "state_update") {
+      msg.stations.forEach(renderStation);
+    }
+  };
+}
+
+connectWebSocket();
+refreshForecast();
+setInterval(refreshAlerts, 5000);
+refreshAlerts();
+</script>
+</body>
+</html>
