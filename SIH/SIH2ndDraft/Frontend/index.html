@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antarctic Stations Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script> -->
+<style>
+  :root {
+    /* ---- Antarctic blueprint / aurora token system ---- */
+    --ink: #0a121c;
+    --ink-2: #0d1723;
+    --panel: #111d2b;
+    --panel-2: #16263a;
+    --line: #23384c;
+    --line-soft: #1a2c3e;
+    --frost: #eaf4fa;
+    --mist: #8296a8;
+    --mist-dim: #5b7086;
+
+    --nominal: #4fd8a6;
+    --nominal-bg: rgba(79, 216, 166, 0.12);
+    --warning: #f2b547;
+    --warning-bg: rgba(242, 181, 71, 0.13);
+    --critical: #ff5d5d;
+    --critical-bg: rgba(255, 93, 93, 0.14);
+    --unknown: #64798c;
+    --unknown-bg: rgba(100, 121, 140, 0.12);
+
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ink);
+    background-image:
+      radial-gradient(circle at 12% -10%, rgba(95, 211, 232, 0.07), transparent 40%),
+      radial-gradient(circle at 100% 0%, rgba(79, 216, 166, 0.05), transparent 35%);
+    color: var(--frost);
+    font-family: var(--body);
+    min-height: 100vh;
+  }
+  a { color: inherit; }
+  button { font-family: inherit; cursor: pointer; }
+
+  ::selection { background: rgba(95, 211, 232, 0.3); }
+
+  /* ---------- header ---------- */
+  header.top {
+    position: sticky; top: 0; z-index: 20;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 16px 28px;
+    background: rgba(10, 18, 28, 0.92);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(6px);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .brand .mark {
+    width: 34px; height: 34px; border-radius: 8px;
+    border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    background: linear-gradient(160deg, var(--panel-2), var(--panel));
+  }
+  .brand .titles h1 {
+    font-family: var(--display); font-size: 16px; font-weight: 600;
+    margin: 0; letter-spacing: 0.02em; color: var(--frost);
+  }
+  .brand .titles p { margin: 0; font-size: 12px; color: var(--mist); }
+
+  .header-right { display: flex; align-items: center; gap: 18px; }
+  .conn { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--mist); }
+  .conn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--unknown); }
+  .conn.live .dot { background: var(--nominal); }
+  .conn.live { color: var(--nominal); }
+
+  nav.breadcrumb { font-size: 12px; color: var(--mist); }
+  nav.breadcrumb button {
+    background: none; border: none; color: var(--mist); font-size: 12px;
+    font-family: var(--body); padding: 0;
+  }
+  nav.breadcrumb button:hover { color: var(--ice, #5fd3e8); }
+  nav.breadcrumb .current { color: var(--frost); }
+  nav.breadcrumb .sep { margin: 0 6px; color: var(--mist-dim); }
+
+  /* ---------- layout shell ---------- */
+  main#app {
+    max-width: 1180px; margin: 0 auto; padding: 28px;
+  }
+  .page-head { margin-bottom: 22px; }
+  .page-head .eyebrow {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mist-dim); margin: 0 0 6px;
+  }
+  .page-head h2 {
+    font-family: var(--display); font-size: 26px; margin: 0 0 4px; font-weight: 600;
+  }
+  .page-head p.sub { margin: 0; color: var(--mist); font-size: 14px; }
+
+  .banner {
+    border: 1px solid var(--line); background: var(--panel);
+    border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--mist);
+    margin-bottom: 18px;
+  }
+  .banner.error { border-color: rgba(255,93,93,0.4); color: #ffb3b0; background: var(--critical-bg); }
+  .banner code { font-family: var(--mono); color: var(--frost); }
+
+  /* ---------- outside conditions strip ---------- */
+  .outside-strip {
+    display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 12px 18px; background: var(--panel);
+    margin-bottom: 22px;
+    font-family: var(--mono); font-size: 13px;
+  }
+  .outside-strip .label {
+    font-family: var(--body); font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--mist-dim); margin-right: 4px;
+  }
+  .outside-strip .item { display: flex; align-items: center; gap: 6px; color: var(--frost); }
+  .outside-strip .item .icon { font-size: 14px; }
+  .outside-strip .storm {
+    color: var(--critical); font-family: var(--body); font-weight: 600; font-size: 12px;
+    padding: 2px 8px; border: 1px solid var(--critical); border-radius: 20px;
+  }
+
+  /* ---------- status chip / dot ---------- */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border: 1px solid transparent;
+  }
+  .status-badge.nominal { color: var(--nominal); background: var(--nominal-bg); border-color: rgba(79,216,166,0.3); }
+  .status-badge.warning { color: var(--warning); background: var(--warning-bg); border-color: rgba(242,181,71,0.3); }
+  .status-badge.critical { color: var(--critical); background: var(--critical-bg); border-color: rgba(255,93,93,0.35); }
+  .status-badge.unknown { color: var(--unknown); background: var(--unknown-bg); border-color: rgba(100,121,140,0.3); }
+
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; display: inline-block; }
+  .dot.nominal { background: var(--nominal); }
+  .dot.warning { background: var(--warning); }
+  .dot.critical { background: var(--critical); }
+  .dot.unknown { background: var(--unknown); }
+
+  /* ---------- home: station cards ---------- */
+  .station-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 780px) { .station-grid { grid-template-columns: 1fr; } }
+
+  .station-card {
+    border: 1px solid var(--line); background: var(--panel);
+    border-radius: 14px; padding: 22px; cursor: pointer;
+  }
+  .station-card:hover { border-color: rgba(95, 211, 232, 0.45); }
+  .station-card .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 14px; }
+  .station-card h3 { font-family: var(--display); font-size: 20px; margin: 0; }
+  .station-card .head .sub { font-size: 12px; color: var(--mist); margin-top: 2px; }
+
+  .attention-block {
+    border: 1px solid var(--line-soft); border-radius: 10px; padding: 12px 14px;
+    background: var(--panel-2); margin-bottom: 14px;
+  }
+  .attention-block .k { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--mist-dim); margin-bottom: 6px; }
+  .attention-block .v { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .attention-block .v.ok { color: var(--nominal); }
+  .attention-block .meta { font-size: 12px; color: var(--mist); margin-top: 3px; font-family: var(--mono); }
+
+  .resupply-row { display: flex; gap: 10px; margin-bottom: 14px; }
+  .resupply-chip {
+    flex: 1; border: 1px solid var(--line-soft); border-radius: 10px; padding: 10px 12px;
+    background: var(--panel-2);
+  }
+  .resupply-chip .k { font-size: 11px; color: var(--mist-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .resupply-chip .v { font-family: var(--mono); font-size: 15px; font-weight: 600; margin-top: 3px; }
+  .resupply-chip.nominal .v { color: var(--nominal); }
+  .resupply-chip.warning .v { color: var(--warning); }
+  .resupply-chip.critical .v { color: var(--critical); }
+  .resupply-chip.unknown .v { color: var(--mist); }
+
+  .enter-link { font-size: 13px; color: #5fd3e8; font-weight: 600; }
+
+  /* ---------- station blueprint map ---------- */
+  .blueprint-wrap {
+    position: relative; border: 1px solid var(--line); border-radius: 14px;
+    padding: 26px; background:
+      repeating-linear-gradient(0deg, transparent, transparent 27px, var(--line-soft) 27px, var(--line-soft) 28px),
+      repeating-linear-gradient(90deg, transparent, transparent 27px, var(--line-soft) 27px, var(--line-soft) 28px),
+      var(--panel);
+  }
+  .compass { position: absolute; top: 18px; right: 22px; text-align: center; color: var(--mist); font-family: var(--mono); font-size: 11px; }
+  .compass .arrow { font-size: 18px; color: var(--frost); display: block; margin-bottom: 2px; }
+
+  .room-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px;
+  }
+  @media (max-width: 640px) { .room-grid { grid-template-columns: 1fr !important; } .room-grid .room-box { grid-column: auto !important; } }
+
+  .room-box {
+    border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    background: rgba(17, 29, 43, 0.85); cursor: pointer;
+    border-left: 3px solid var(--unknown);
+  }
+  .room-box.nominal { border-left-color: var(--nominal); }
+  .room-box.warning { border-left-color: var(--warning); }
+  .room-box.critical { border-left-color: var(--critical); }
+  .room-box:hover { border-color: rgba(95, 211, 232, 0.5); }
+  .room-box .rb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .room-box .rb-head .name { font-family: var(--display); font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .room-box .note { font-size: 12px; color: var(--mist); line-height: 1.5; }
+  .room-box .comp-list { display: flex; flex-direction: column; gap: 6px; }
+  .room-box .comp-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; }
+  .room-box .comp-row .left { display: flex; align-items: center; gap: 7px; color: var(--mist); }
+  .room-box .comp-row .val { font-family: var(--mono); color: var(--frost); font-weight: 500; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-top: 18px; font-size: 12px; color: var(--mist); }
+  .legend .item { display: flex; align-items: center; gap: 6px; }
+
+  /* ---------- room detail ---------- */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 26px; }
+  .status-chip {
+    border: 1px solid var(--line); border-radius: 20px; padding: 6px 12px;
+    font-size: 12px; display: flex; align-items: center; gap: 7px; background: var(--panel);
+  }
+
+  .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 820px) { .comp-grid { grid-template-columns: 1fr; } }
+
+  .comp-card { border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--panel); }
+  .comp-card .cc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; }
+  .comp-card .cc-head .label { font-family: var(--display); font-size: 15px; font-weight: 600; }
+  .comp-card .cc-value { font-family: var(--mono); font-size: 26px; font-weight: 600; margin: 2px 0 6px; }
+  .comp-card .cc-narrative { font-size: 12.5px; color: var(--mist); margin-bottom: 12px; line-height: 1.5; }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+  @media (max-width: 520px) { .chart-row { grid-template-columns: 1fr; } }
+  .chart-box { border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; background: var(--panel-2); }
+  .chart-box .ct-label { font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--mist-dim); margin-bottom: 4px; }
+  .chart-box canvas { max-height: 110px; }
+
+  .horizon-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .horizon-pill { border: 1px solid var(--line-soft); border-radius: 8px; padding: 8px 10px; text-align: center; background: var(--panel-2); }
+  .horizon-pill .hk { font-size: 10.5px; color: var(--mist-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+  .horizon-pill .hv { font-family: var(--mono); font-size: 15px; font-weight: 600; margin-top: 3px; }
+  .horizon-pill.nominal .hv { color: var(--nominal); }
+  .horizon-pill.warning .hv { color: var(--warning); }
+  .horizon-pill.critical .hv { color: var(--critical); }
+
+  .section-label {
+    font-family: var(--display); font-size: 13px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; color: var(--mist);
+    margin: 30px 0 14px; display: flex; align-items: center; gap: 10px;
+  }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .loading { padding: 60px 0; text-align: center; color: var(--mist); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand" onclick="navigate('/')">
+    <div class="mark">❄</div>
+    <div class="titles">
+      <h1>Antarctic Digital Twin</h1>
+      <p>Maitri &middot; Bharati Research Stations</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting&hellip;</span></div>
+  </div>
+</header>
+
+<main id="app">
+  <div class="loading">Loading digital twin&hellip;</div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+const API_BASE = "http://192.168.1.12:8000";
+const WS_URL = "ws://192.168.1.12:8000";
+
+const LEVEL_LABEL = { nominal: "Nominal", warning: "Warning", critical: "Critical", unknown: "Unknown" };
+
+const BOOL_LABELS = {
+  storm_warning: { true: "Active", false: "Clear" },
+  leak_detected: { true: "Leak", false: "Sealed" },
+  resupply_pending: { true: "Pending", false: "Stocked" },
+};
+
+
+// ---------------------------------------------------------------------
+// tiny hash router
+// ---------------------------------------------------------------------
+function navigate(path) { location.hash = "#" + path; }
+
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const parts = raw.split("/").filter(Boolean);
+  if (parts[0] === "station" && parts[1]) {
+    if (parts[2] === "room" && parts[3]) {
+      return { view: "room", station: parts[1], room: parts[3] };
+    }
+    return { view: "station", station: parts[1] };
+  }
+  return { view: "home" };
+}
+
+async function api(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+function fmtValue(comp) {
+  const { key, value, unit } = comp;
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") {
+    const map = BOOL_LABELS[key];
+    if (map) return map[value];
+    return value ? "Yes" : "No";
+  }
+  if (typeof value === "number") {
+    const rounded = Number.isInteger(value) ? value : Math.round(value * 10) / 10;
+    return unit ? `${rounded} ${unit}` : `${rounded}`;
+  }
+  const str = String(value);
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function iconFor(key) {
+  const map = {
+    temperature_c: "🌡️", wind_speed_kmh: "💨", humidity_pct: "💦",
+    snow_depth_cm: "❄️", visibility_km: "👁️", storm_warning: "⛈️",
+  };
+  return map[key] || "";
+}
+
+// ---------------------------------------------------------------------
+// outside conditions strip (present on station + room pages)
+// ---------------------------------------------------------------------
+function renderOutsideStrip(outside) {
+  if (!outside) return "";
+  const items = [
+    ["🌡️", outside.temperature_c != null ? `${outside.temperature_c}°C` : "—"],
+    ["💨", outside.wind_speed_kmh != null ? `${outside.wind_speed_kmh} km/h` : "—"],
+    ["❄️", outside.snow_depth_cm != null ? `${outside.snow_depth_cm} cm snow` : "—"],
+    ["👁️", outside.visibility_km != null ? `${outside.visibility_km} km vis.` : "—"],
+    ["💦", outside.humidity_pct != null ? `${outside.humidity_pct}% humidity` : "—"],
+  ];
+  const itemsHtml = items.map(([icon, txt]) =>
+    `<span class="item"><span class="icon">${icon}</span>${txt}</span>`).join("");
+  const storm = outside.storm_warning ? `<span class="storm">⛈ Storm Warning</span>` : "";
+  return `<div class="outside-strip">
+    <span class="label">Outside</span>${itemsHtml}${storm}
+  </div>`;
+}
+
+// ---------------------------------------------------------------------
+// breadcrumb
+// ---------------------------------------------------------------------
+function renderBreadcrumb(route, stationName, roomName) {
+  const el = document.getElementById("breadcrumb");
+  if (route.view === "home") { el.innerHTML = `<span class="current">Overview</span>`; return; }
+  let html = `<button onclick="navigate('/')">Overview</button>`;
+  if (route.view === "station") {
+    html += `<span class="sep">/</span><span class="current">${stationName || route.station}</span>`;
+  } else if (route.view === "room") {
+    html += `<span class="sep">/</span><button onclick="navigate('/station/${route.station}')">${stationName || route.station}</button>`;
+    html += `<span class="sep">/</span><span class="current">${roomName || route.room}</span>`;
+  }
+  el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// HOME
+// ---------------------------------------------------------------------
+async function renderHome() {
+  renderBreadcrumb({ view: "home" });
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Live Overview</p>
+      <h2>Station Overview</h2>
+      <p class="sub">Current condition of both stations, what needs attention, and time to next resupply.</p>
+    </div>
+    <div id="home-body"><div class="loading">Loading station data&hellip;</div></div>
+  `;
+
+  let overview;
+  try {
+    overview = await api("/api/overview");
+  } catch (e) {
+    document.getElementById("home-body").innerHTML = connectionErrorBanner();
+    return;
+  }
+
+  const cards = overview.map(st => {
+    const critical = st.critical_component;
+    const attentionHtml = critical
+      ? `<div class="v"><span class="dot ${critical.level}"></span>${critical.label} &mdash; ${critical.room}</div>
+         <div class="meta">${fmtValue(critical)} &middot; ${LEVEL_LABEL[critical.level]}</div>`
+      : `<div class="v ok"><span class="dot nominal"></span>All systems nominal</div>`;
+
+    const resupplyHtml = st.resupply.map(r => `
+      <div class="resupply-chip ${r.level}">
+        <div class="k">${r.item}</div>
+        <div class="v">${r.days_remaining != null ? r.days_remaining + " days" : "—"}</div>
+      </div>
+    `).join("");
+
+    return `
+      <div class="station-card" onclick="navigate('/station/${st.station_id}')">
+        <div class="head">
+          <div>
+            <h3>${st.display_name}</h3>
+            <div class="sub">${st.outside.temperature_c != null ? st.outside.temperature_c + "°C outside" : "awaiting telemetry"}</div>
+          </div>
+          <span class="status-badge ${st.overall_status}">${LEVEL_LABEL[st.overall_status] || st.overall_status}</span>
+        </div>
+        <div class="attention-block">
+          <div class="k">Needs attention</div>
+          ${attentionHtml}
+        </div>
+        <div class="resupply-row">${resupplyHtml}</div>
+        <div class="enter-link">View station blueprint &rarr;</div>
+      </div>
+    `;
+  }).join("");
+
+  document.getElementById("home-body").innerHTML = `<div class="station-grid">${cards}</div>`;
+}
+
+function connectionErrorBanner() {
+  return `<div class="banner error">
+    Can't reach the digital twin backend at <code>${API_BASE}</code>.
+    Make sure MQTT, Postgres, the simulator, and <code>uvicorn main:app</code> are all running, then reload this page.
+  </div>`;
+}
+
+// ---------------------------------------------------------------------
+// STATION BLUEPRINT MAP
+// ---------------------------------------------------------------------
+async function renderStation(stationId) {
+  renderBreadcrumb({ view: "station", station: stationId });
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="loading">Loading station blueprint&hellip;</div>`;
+
+  let data;
+  try {
+    data = await api(`/api/stations/${stationId}/rooms`);
+  } catch (e) {
+    app.innerHTML = connectionErrorBanner();
+    return;
+  }
+  renderBreadcrumb({ view: "station", station: stationId }, data.display_name);
+
+  const roomBoxes = data.rooms.map(room => {
+    const compsHtml = room.components.length
+      ? `<div class="comp-list">${room.components.map(c => `
+          <div class="comp-row">
+            <span class="left"><span class="dot ${c.level}"></span>${c.label}</span>
+            <span class="val">${fmtValue(c)}</span>
+          </div>`).join("")}</div>`
+      : `<div class="note">${room.note || "No live telemetry for this area."}</div>`;
+
+    const clickable = room.components.length > 0;
+    return `
+      <div class="room-box ${room.status}"
+           style="grid-row:${room.grid.row}; grid-column: ${room.grid.col} / span ${room.grid.colSpan};"
+           ${clickable ? `onclick="navigate('/station/${stationId}/room/${room.id}')"` : ""}>
+        <div class="rb-head">
+          <span class="name">${room.icon} ${room.name}</span>
+          <span class="dot ${room.status}"></span>
+        </div>
+        ${compsHtml}
+      </div>
+    `;
+  }).join("");
+
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Station Blueprint</p>
+      <h2>${data.display_name}</h2>
+      <p class="sub">Top-view layout &mdash; select a room for detailed readings and predictive outlook.</p>
+    </div>
+    ${renderOutsideStrip(data.outside)}
+    <div class="blueprint-wrap">
+      <div class="compass"><span class="arrow">&uarr;</span>N</div>
+      <div class="room-grid">${roomBoxes}</div>
+    </div>
+    <div class="legend">
+      <span class="item"><span class="dot nominal"></span>Nominal</span>
+      <span class="item"><span class="dot warning"></span>Warning</span>
+      <span class="item"><span class="dot critical"></span>Critical</span>
+      <span class="item"><span class="dot unknown"></span>No data yet</span>
+    </div>
+  `;
+}
+
+// ---------------------------------------------------------------------
+// ROOM DETAIL
+// ---------------------------------------------------------------------
+let activeCharts = [];
+function destroyCharts() { activeCharts.forEach(c => c.destroy()); activeCharts = []; }
+
+async function renderRoom(stationId, roomId) {
+  renderBreadcrumb({ view: "room", station: stationId, room: roomId });
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="loading">Loading room detail&hellip;</div>`;
+  destroyCharts();
+
+  let roomData, predictData;
+  try {
+    [roomData, predictData] = await Promise.all([
+      api(`/api/stations/${stationId}/rooms/${roomId}`),
+      api(`/api/stations/${stationId}/rooms/${roomId}/predict`),
+    ]);
+  } catch (e) {
+    app.innerHTML = connectionErrorBanner();
+    return;
+  }
+
+  const room = roomData.room;
+  renderBreadcrumb({ view: "room", station: stationId, room: roomId }, roomData.display_name, room.name);
+
+  const nonNumeric = room.components.filter(c => !c.numeric);
+  const chipsHtml = nonNumeric.map(c => `
+    <span class="status-chip"><span class="dot ${c.level}"></span>${c.label}: ${fmtValue(c)}</span>
+  `).join("");
+
+  // group history fetches by subsystem so we don't refetch the same series per field
+  const subsystems = [...new Set(predictData.predictions.map(p => p.subsystem))];
+  const historyBySubsystem = {};
+  await Promise.all(subsystems.map(async sub => {
+    try {
+      const h = await api(`/api/stations/${stationId}/history/${sub}?limit=30`);
+      historyBySubsystem[sub] = h.records;
+    } catch (e) {
+      historyBySubsystem[sub] = [];
+    }
+  }));
+
+  const cardsHtml = predictData.predictions.map((p, i) => {
+    const recentId = `chart-recent-${i}`;
+    const projId = `chart-proj-${i}`;
+    const horizons = ["7d", "30d", "90d"];
+    const horizonLabels = { "7d": "1 Week", "30d": "1 Month", "90d": "3 Months" };
+    const horizonHtml = horizons.map(h => `
+      <div class="horizon-pill ${p.horizon_levels[h]}">
+        <div class="hk">${horizonLabels[h]}</div>
+        <div class="hv">${p.horizons[h]}${p.unit ? " " + p.unit : ""}</div>
+      </div>
+    `).join("");
+
+    return `
+      <div class="comp-card">
+        <div class="cc-head">
+          <span class="label">${p.label}</span>
+          <span class="status-badge ${p.current_level}">${LEVEL_LABEL[p.current_level]}</span>
+        </div>
+        <div class="cc-value">${p.current}${p.unit ? " " + p.unit : ""}</div>
+        <div class="cc-narrative">${p.narrative}</div>
+        <div class="chart-row">
+          <div class="chart-box">
+            <div class="ct-label">Recent Readings</div>
+            <canvas id="${recentId}"></canvas>
+          </div>
+          <div class="chart-box">
+            <div class="ct-label">AI Projection &middot; next 90 days</div>
+            <canvas id="${projId}"></canvas>
+          </div>
+        </div>
+        <div class="horizon-row">${horizonHtml}</div>
+      </div>
+    `;
+  }).join("");
+
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Room Detail</p>
+      <h2>${room.icon} ${room.name}</h2>
+      <p class="sub">${roomData.display_name} &middot; live readings and AI-projected outlook</p>
+    </div>
+    ${renderOutsideStrip(roomData.outside)}
+    ${nonNumeric.length ? `<div class="chip-row">${chipsHtml}</div>` : ""}
+    ${predictData.predictions.length
+      ? `<div class="section-label">Predictive Outlook</div><div class="comp-grid">${cardsHtml}</div>`
+      : `<div class="banner">No numeric telemetry to chart for this room yet &mdash; check back once readings arrive.</div>`}
+  `;
+
+  // draw charts now that the canvases exist in the DOM
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.color = "#8296a8";
+
+  predictData.predictions.forEach((p, i) => {
+    const records = historyBySubsystem[p.subsystem] || [];
+    const recentValues = records.map(r => r[p.key]).filter(v => v !== null && v !== undefined);
+
+    const recentCtx = document.getElementById(`chart-recent-${i}`);
+    if (recentCtx) {
+      activeCharts.push(new Chart(recentCtx, {
+        type: "line",
+        data: {
+          labels: recentValues.map((_, idx) => idx + 1),
+          datasets: [{
+            data: recentValues,
+            borderColor: "#5fd3e8",
+            backgroundColor: "rgba(95,211,232,0.08)",
+            pointRadius: 0,
+            borderWidth: 1.5,
+            fill: true,
+            tension: 0,
+          }],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { enabled: true } },
+          scales: {
+            x: { display: false },
+            y: { grid: { color: "#1a2c3e" }, ticks: { font: { size: 9 } } },
+          },
+        },
+      }));
+    }
+
+    const projCtx = document.getElementById(`chart-proj-${i}`);
+    if (projCtx) {
+      activeCharts.push(new Chart(projCtx, {
+        type: "line",
+        data: {
+          labels: p.graph.map(pt => `${pt.day}d`),
+          datasets: [{
+            data: p.graph.map(pt => pt.value),
+            borderColor: p.slope_per_day < 0 ? "#f2b547" : "#4fd8a6",
+            backgroundColor: "transparent",
+            pointRadius: 0,
+            borderWidth: 1.5,
+            borderDash: [5, 4],
+            tension: 0.15,
+          }],
+        },
+        options: {
+          animation: false,
+          responsive: true,
+          plugins: { legend: { display: false }, tooltip: { enabled: true } },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 9 }, maxTicksLimit: 5 } },
+            y: { grid: { color: "#1a2c3e" }, ticks: { font: { size: 9 } } },
+          },
+        },
+      }));
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
+// router + live refresh
+// ---------------------------------------------------------------------
+function route() {
+  const r = parseRoute();
+  if (r.view === "home") renderHome();
+  else if (r.view === "station") renderStation(r.station);
+  else if (r.view === "room") renderRoom(r.station, r.room);
+}
+
+let lastRefresh = 0;
+function throttledRefresh() {
+  const now = Date.now();
+  if (now - lastRefresh < 2000) return; // MQTT pushes several times/sec; don't thrash the DOM
+  lastRefresh = now;
+  route();
+}
+
+function connectWebSocket() {
+  const ws = new WebSocket(WS_URL);
+  const el = document.getElementById("conn");
+  const txt = document.getElementById("conn-text");
+
+  ws.onopen = () => { el.classList.add("live"); txt.textContent = "live"; };
+  ws.onclose = () => {
+    el.classList.remove("live"); txt.textContent = "disconnected — retrying";
+    setTimeout(connectWebSocket, 2000);
+  };
+  ws.onerror = () => ws.close();
+  ws.onmessage = () => throttledRefresh();
+}
+
+window.addEventListener("hashchange", route);
+route();
+connectWebSocket();
+</script>
+</body>
+</html>
