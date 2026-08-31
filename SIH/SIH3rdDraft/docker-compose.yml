@@ -1,0 +1,25 @@
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: adt-mosquitto
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  postgres:
+    image: postgres:16
+    container_name: adt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: adt
+      POSTGRES_PASSWORD: adt_password
+      POSTGRES_DB: digital_twin
+    ports:
+      - "5432:5432"
+    volumes:
+      - adt_pg_data:/var/lib/postgresql/data
+
+volumes:
+  adt_pg_data:
