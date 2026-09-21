@@ -1,0 +1,1104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Antarctic Stations Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script> -->
+ <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    /* ---- ice-sheet / glacier-signage token system ---- */
+    --snow: #ffffff;
+    --ice-bg: #eef4f9;
+    --ice-bg-2: #e2edf5;
+    --panel: #ffffff;
+    --panel-2: #f4f9fc;
+    --line: #cbdce9;
+    --line-strong: #a9c2d6;
+    --ink: #0b2540;
+    --ink-soft: #3f5b74;
+    --ink-dim: #74889b;
+
+    --navy: #0b3a63;
+    --navy-2: #0e4c80;
+
+    --nominal: #1c8f5e;
+    --nominal-bg: #e2f6ec;
+    --nominal-line: #a9dfc4;
+    --warning: #a86a06;
+    --warning-bg: #fbedd3;
+    --warning-line: #edc888;
+    --critical: #b8323b;
+    --critical-bg: #fbe3e4;
+    --critical-line: #edaeb2;
+    --unknown: #74889b;
+    --unknown-bg: #eaf0f5;
+    --unknown-line: #cbdce9;
+
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+
+    --fs-base: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+  body {
+    background: var(--ice-bg);
+    background-image:
+      radial-gradient(circle at 8% -6%, rgba(255,255,255,0.9), transparent 32%),
+      radial-gradient(circle at 100% 0%, rgba(255,255,255,0.7), transparent 30%);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: var(--fs-base);
+    min-height: 100vh;
+  }
+  a { color: inherit; }
+  button { font-family: inherit; cursor: pointer; }
+  ::selection { background: rgba(30, 127, 184, 0.22); }
+
+  /* ---------- header ---------- */
+  header.top {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px clamp(16px, 3vw, 40px);
+    background: var(--navy);
+    color: var(--snow);
+    border-bottom: 3px solid var(--navy-2);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; background: rgba(255,255,255,0.08);
+  }
+  .brand .titles h1 { font-family: var(--display); font-size: 18px; font-weight: 700; margin: 0; letter-spacing: 0.02em; }
+  .brand .titles p { margin: 0; font-size: 12.5px; color: rgba(255,255,255,0.72); }
+
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .conn { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: rgba(255,255,255,0.7); }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+  .conn.live .dot { background: #6ee7a8; }
+  .conn.live { color: #a8f0c4; }
+
+  nav.breadcrumb { font-size: 12.5px; color: rgba(255,255,255,0.75); }
+  nav.breadcrumb button { background: none; border: none; color: rgba(255,255,255,0.75); font-size: 12.5px; font-family: var(--body); padding: 0; }
+  nav.breadcrumb button:hover { color: #ffffff; text-decoration: underline; }
+  nav.breadcrumb .current { color: #ffffff; font-weight: 600; }
+  nav.breadcrumb .sep { margin: 0 6px; color: rgba(255,255,255,0.4); }
+
+  /* ---------- layout shell (full width) ---------- */
+  main#app { width: 100%; max-width: 1900px; margin: 0 auto; padding: 24px clamp(16px, 3vw, 40px) 60px; }
+  .page-head { margin-bottom: 20px; }
+  .page-head .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 6px; font-weight: 600; }
+  .page-head h2 { font-family: var(--display); font-size: clamp(24px, 3vw, 32px); margin: 0 0 4px; font-weight: 700; color: var(--navy); }
+  .page-head p.sub { margin: 0; color: var(--ink-soft); font-size: 15px; }
+
+  .banner { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 16px 18px; font-size: 14.5px; color: var(--ink-soft); margin-bottom: 18px; }
+  .banner.error { border-color: var(--critical-line); color: var(--critical); background: var(--critical-bg); }
+  .banner code { font-family: var(--mono); color: var(--ink); background: rgba(11,37,64,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- outside conditions strip ---------- */
+  .outside-strip {
+    display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 13px 20px; background: var(--panel);
+    margin-bottom: 22px; font-family: var(--mono); font-size: 14.5px;
+  }
+  .outside-strip .label { font-family: var(--body); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); margin-right: 2px; font-weight: 700; }
+  .outside-strip .item { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+  .outside-strip .item .icon { font-size: 15px; }
+  .outside-strip .day { color: var(--navy-2); font-weight: 700; }
+  .outside-strip .storm { color: var(--critical); font-family: var(--body); font-weight: 700; font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--critical-line); background: var(--critical-bg); border-radius: 20px; }
+
+  /* ---------- status chip / dot ---------- */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid transparent;
+  }
+  .status-badge.nominal { color: var(--nominal); background: var(--nominal-bg); border-color: var(--nominal-line); }
+  .status-badge.warning { color: var(--warning); background: var(--warning-bg); border-color: var(--warning-line); }
+  .status-badge.critical { color: var(--critical); background: var(--critical-bg); border-color: var(--critical-line); }
+  .status-badge.unknown { color: var(--unknown); background: var(--unknown-bg); border-color: var(--unknown-line); }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+  .dot.nominal { background: var(--nominal); } .dot.warning { background: var(--warning); }
+  .dot.critical { background: var(--critical); } .dot.unknown { background: var(--unknown); }
+
+  /* ---------- home: supply ship band ---------- */
+  .ship-band { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  @media (max-width: 780px) { .ship-band { grid-template-columns: 1fr; } }
+  .ship-card { border: 1px solid var(--navy-2); border-radius: 12px; padding: 18px 20px; background: linear-gradient(160deg, #0e4c80, #0b3a63); color: var(--snow); }
+  .ship-card .sc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .ship-card .sc-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.65); font-weight: 700; margin-bottom: 3px; }
+  .ship-card .sc-name { font-family: var(--display); font-size: 17px; font-weight: 700; }
+  .ship-card .sc-eta { font-family: var(--mono); font-size: 28px; font-weight: 700; }
+  .ship-card .sc-eta small { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); }
+  .ship-card .sc-status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; background: rgba(255,255,255,0.15); }
+  .ship-card .sc-bar-track { height: 8px; border-radius: 5px; background: rgba(255,255,255,0.18); margin-top: 12px; overflow: hidden; }
+  .ship-card .sc-bar-fill { height: 100%; background: #6ee7a8; }
+  .ship-card .sc-warn { margin-top: 10px; font-size: 12.5px; color: #ffd7a8; background: rgba(255,255,255,0.08); padding: 8px 10px; border-radius: 8px; }
+
+  /* ---------- home: station cards ---------- */
+  .station-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 780px) { .station-grid { grid-template-columns: 1fr; } }
+
+  .station-card { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 24px; cursor: pointer; }
+  .station-card:hover { border-color: var(--navy-2); }
+  .station-card .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .station-card h3 { font-family: var(--display); font-size: 22px; margin: 0; color: var(--navy); }
+  .station-card .head .sub { font-size: 13px; color: var(--ink-dim); margin-top: 3px; font-family: var(--mono); }
+
+  .attention-block { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; background: var(--panel-2); margin-bottom: 14px; }
+  .attention-block .k { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; font-weight: 700; }
+  .attention-block .v { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .attention-block .v.ok { color: var(--nominal); }
+  .attention-block .meta { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; font-family: var(--mono); }
+
+  .resupply-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .resupply-chip { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
+  .resupply-chip .k { font-size: 11.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .resupply-chip .v { font-family: var(--mono); font-size: 16px; font-weight: 700; margin-top: 3px; }
+  .resupply-chip.nominal .v { color: var(--nominal); }
+  .resupply-chip.warning .v { color: var(--warning); }
+  .resupply-chip.critical .v { color: var(--critical); }
+  .resupply-chip.unknown .v { color: var(--ink-dim); }
+
+  .enter-link { font-size: 13.5px; color: var(--navy-2); font-weight: 700; margin-top: 6px; }
+
+  /* ---------- station 3D viewer ---------- */
+  .viewer-wrap {
+    position: relative; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); margin-bottom: 20px; overflow: hidden;
+    height: min(72vh, 680px); min-height: 380px;
+  }
+  #viewer-canvas-host { position: absolute; inset: 0; }
+  #viewer-canvas-host canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  #viewer-canvas-host canvas:active { cursor: grabbing; }
+
+  .viewer-loading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--ink-dim); font-size: 14px; background: var(--panel); z-index: 2;
+  }
+
+  /* view-preset box, top-right */
+  .view-presets {
+    position: absolute; top: 14px; right: 14px; z-index: 3;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    background: rgba(255,255,255,0.92); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; backdrop-filter: blur(3px); box-shadow: 0 2px 10px rgba(11,37,64,0.08);
+  }
+  .view-presets button {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-soft);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.03em; border-radius: 6px;
+    padding: 7px 6px; min-width: 52px;
+  }
+  .view-presets button:hover { border-color: var(--navy-2); color: var(--navy); }
+  .view-presets button.active { background: var(--navy); color: var(--snow); border-color: var(--navy); }
+
+  /* hover data panel, left side */
+  .room-hover-panel {
+    position: absolute; top: 14px; left: 14px; z-index: 3; width: 260px; max-width: calc(100% - 28px);
+    background: rgba(255,255,255,0.95); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; backdrop-filter: blur(3px); box-shadow: 0 2px 10px rgba(11,37,64,0.08);
+    font-size: 13px; pointer-events: none;
+  }
+  .room-hover-panel .rhp-empty { color: var(--ink-dim); font-size: 12.5px; line-height: 1.5; }
+  .room-hover-panel .rhp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .room-hover-panel .rhp-title { font-family: var(--display); font-weight: 700; font-size: 14.5px; color: var(--navy); }
+  .room-hover-panel .comp-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; padding: 3px 0; gap: 8px; }
+  .room-hover-panel .comp-row .left { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); }
+  .room-hover-panel .comp-row .val { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+  .room-hover-panel .note-text { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+
+  /* floating critical-alert popups, projected from 3D positions */
+  .critical-popup {
+    position: absolute; z-index: 4; transform: translate(-50%, -100%); pointer-events: none;
+    background: var(--critical-bg); border: 1.5px solid var(--critical); color: var(--critical);
+    border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(184,50,59,0.25); display: none;
+  }
+  .critical-popup::after {
+    content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--critical);
+  }
+
+  .viewer-hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+    font-size: 11.5px; color: var(--ink-dim); background: rgba(255,255,255,0.85);
+    border: 1px solid var(--line); border-radius: 20px; padding: 5px 14px;
+  }
+
+  .legend-box { display: flex; flex-wrap: wrap; gap: 16px 22px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+  .legend-box .grp { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+  .legend-box .grp-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim); font-weight: 700; margin-right: 2px; }
+  .legend-box .item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+
+  /* ---------- room detail ---------- */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 26px; }
+  .status-chip { border: 1px solid var(--line); border-radius: 20px; padding: 7px 14px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; background: var(--panel); }
+
+  .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .comp-grid { grid-template-columns: 1fr; } }
+
+  .comp-card { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; background: var(--panel); }
+  .comp-card .cc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 10px; }
+  .comp-card .cc-head .label { font-family: var(--display); font-size: 16.5px; font-weight: 700; color: var(--navy); }
+  .comp-card .cc-value { font-family: var(--mono); font-size: 30px; font-weight: 700; margin: 3px 0 7px; }
+  .comp-card .cc-narrative { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 14px; line-height: 1.5; }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 560px) { .chart-row { grid-template-columns: 1fr; } }
+  .chart-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+  .chart-box .ct-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 4px; font-weight: 700; }
+  .chart-box canvas { max-height: 130px; }
+
+  .horizon-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .horizon-pill { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; text-align: center; background: var(--panel-2); }
+  .horizon-pill .hk { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+  .horizon-pill .hv { font-family: var(--mono); font-size: 16.5px; font-weight: 700; margin-top: 3px; }
+  .horizon-pill.nominal .hv { color: var(--nominal); }
+  .horizon-pill.warning .hv { color: var(--warning); }
+  .horizon-pill.critical .hv { color: var(--critical); }
+
+  .section-label { font-family: var(--display); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); margin: 32px 0 16px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .loading { padding: 70px 0; text-align: center; color: var(--ink-dim); font-size: 14.5px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand" onclick="navigate('/')">
+    <div class="mark">❄</div>
+    <div class="titles">
+      <h1>Antarctic Digital Twin</h1>
+      <p>Maitri &middot; Bharati Research Stations</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting&hellip;</span></div>
+  </div>
+</header>
+
+<main id="app"><div class="loading">Loading digital twin&hellip;</div></main>
+
+<script>
+const API_BASE = "http://localhost:8000";
+const WS_URL = "ws://localhost:8000/ws";
+
+const LEVEL_LABEL = { nominal: "Nominal", warning: "Warning", critical: "Critical", unknown: "Unknown" };
+const BOOL_LABELS = {
+  storm_warning: { true: "Active", false: "Clear" },
+  leak_detected: { true: "Leak", false: "Sealed" },
+  resupply_pending: { true: "Pending", false: "Stocked" },
+};
+// Room metadata mirrored from backend twin_state.ROOM_LAYOUTS (same for both
+// stations) - used for the hover-panel header and view-preset labeling.
+const ROOM_META = [
+  { id: "environment_zone", name: "Environment Zone", icon: "🌡️" },
+  { id: "auxiliary_facilities", name: "Summer Camp & Container Modules", icon: "🏕️" },
+  { id: "main_building", name: "Main Building", icon: "🏠" },
+  { id: "power_energy", name: "Power / Energy Plant", icon: "⚡" },
+  { id: "communication", name: "Communication", icon: "📡" },
+  { id: "fuel_system", name: "Fuel Farm & Station", icon: "🛢️" },
+  { id: "water_pump_house", name: "Water Pump House", icon: "💧" },
+];
+const ROOM_META_BY_ID = Object.fromEntries(ROOM_META.map(r => [r.id, r]));
+
+// ---------------------------------------------------------------------
+// 3D station models
+// ---------------------------------------------------------------------
+// Both GLBs were exported Z-up (confirmed by inspecting the raw vertex
+// bounding box - the Z axis has by far the smallest extent, consistent
+// with it being "height" on a station-shaped model) but three.js is Y-up,
+// so every model gets rotated -90 degrees around X on load. If a model
+// ever looks upside-down or backwards after this fix, flip the sign here.
+const MODEL_CONFIGS = {
+  maitri: { path: "models/maitri.glb", tiltFixX: -Math.PI / 2 },
+  bharati: { path: "models/bharati.glb", tiltFixX: -Math.PI / 2 },
+};
+
+// The GLBs are a flat mesh list (no per-room grouping), so we classify each
+// mesh into one of our existing rooms by matching its name against these
+// patterns - first match wins. Anything that matches nothing (terrain,
+// rocks, helipad, access paths, ...) is left as unclassified scenery: still
+// rendered, but not clickable/hoverable and never highlighted.
+const CLASSIFY_RULES = [
+  [/sensor_main_environment/i, "environment_zone"],
+  [/sensor_structure_central/i, "main_building"],
+  [/fuel_tank|fuel_platform|sensor_fuel/i, "fuel_system"],
+  [/power_facility|solar_panel|solar_array|sensor_power/i, "power_energy"],
+  [/communication|radome|mast_crossbar/i, "communication"],
+  [/utility_module|water_tank/i, "water_pump_house"],
+  [/laboratory_module|shipping_container/i, "auxiliary_facilities"],
+  [/main_building|main_roof|raised_roof|skylight|lower_service_band|central_entrance|main_window|front_window|central_facade|main_support|support_foot|lower_crossbeam|access_platform|^stair_|main_rooftop|structural_support|access_stair/i, "main_building"],
+];
+function classifyNode(name) {
+  for (const [re, room] of CLASSIFY_RULES) if (re.test(name)) return room;
+  return null;
+}
+
+// ---------------------------------------------------------------------
+// router / mount state
+// ---------------------------------------------------------------------
+let currentMount = null;      // {view, station, room}
+let activeCharts = {};        // chart-id -> Chart instance (room view only)
+let refreshFn = null;         // the patch function for whatever is mounted now
+
+function navigate(path) { location.hash = "#" + path; }
+
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const parts = raw.split("/").filter(Boolean);
+  if (parts[0] === "station" && parts[1]) {
+    if (parts[2] === "room" && parts[3]) return { view: "room", station: parts[1], room: parts[3] };
+    return { view: "station", station: parts[1] };
+  }
+  return { view: "home" };
+}
+function sameMount(a, b) { return a && b && a.view === b.view && a.station === b.station && a.room === b.room; }
+
+function destroyCharts() { Object.values(activeCharts).forEach(c => c.destroy()); activeCharts = {}; }
+
+async function route() {
+  const r = parseRoute();
+  if (sameMount(r, currentMount)) return;
+  currentMount = r;
+  if (r.view === "home") await mountHome();
+  else if (r.view === "station") await mountStation(r.station);
+  else if (r.view === "room") await mountRoom(r.station, r.room);
+}
+
+let lastRefresh = 0;
+function throttledRefresh() {
+  const now = Date.now();
+  if (now - lastRefresh < 1500) return;
+  lastRefresh = now;
+  if (refreshFn) refreshFn();
+}
+
+// ---------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------
+async function api(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+function fmtValue(comp) {
+  const { key, value, unit } = comp;
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") {
+    const map = BOOL_LABELS[key];
+    return map ? map[value] : (value ? "Yes" : "No");
+  }
+  if (typeof value === "number") {
+    const rounded = Number.isInteger(value) ? value : Math.round(value * 10) / 10;
+    return unit ? `${rounded} ${unit}` : `${rounded}`;
+  }
+  const str = String(value);
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function connectionErrorBanner() {
+  return `<div class="banner error">
+    Can't reach the digital twin backend at <code>${API_BASE}</code>.
+    Make sure MQTT, Postgres, the simulator, and <code>uvicorn main:app</code> are all running, then reload this page.
+  </div>`;
+}
+
+function renderOutsideStrip(outside) {
+  if (!outside) return "";
+  const items = [
+    ["🌡️", outside.temperature_c != null ? `${outside.temperature_c}°C` : "—"],
+    ["💨", outside.wind_speed_kmh != null ? `${outside.wind_speed_kmh} km/h` : "—"],
+    ["❄️", outside.snow_depth_cm != null ? `${outside.snow_depth_cm} cm snow` : "—"],
+    ["👁️", outside.visibility_km != null ? `${outside.visibility_km} km vis.` : "—"],
+    ["💦", outside.humidity_pct != null ? `${outside.humidity_pct}% humidity` : "—"],
+  ];
+  const itemsHtml = items.map(([icon, txt]) => `<span class="item"><span class="icon">${icon}</span>${txt}</span>`).join("");
+  const storm = outside.storm_warning ? `<span class="storm">⛈ Storm Warning</span>` : "";
+  const day = outside.day != null ? `<span class="item day">Day ${outside.day}</span>` : "";
+  return `<div class="outside-strip"><span class="label">Outside</span>${itemsHtml}${day}${storm}</div>`;
+}
+
+function renderBreadcrumb(route, stationName, roomName) {
+  const el = document.getElementById("breadcrumb");
+  if (route.view === "home") { el.innerHTML = `<span class="current">Overview</span>`; return; }
+  let html = `<button onclick="navigate('/')">Overview</button>`;
+  if (route.view === "station") {
+    html += `<span class="sep">/</span><span class="current">${stationName || route.station}</span>`;
+  } else if (route.view === "room") {
+    html += `<span class="sep">/</span><button onclick="navigate('/station/${route.station}')">${stationName || route.station}</button>`;
+    html += `<span class="sep">/</span><span class="current">${roomName || route.room}</span>`;
+  }
+  el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// HOME
+// ---------------------------------------------------------------------
+async function mountHome() {
+  destroyCharts();
+  disposeViewer();
+  renderBreadcrumb({ view: "home" });
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Live Overview</p>
+      <h2>Station Overview</h2>
+      <p class="sub">Current condition of both stations, what needs attention, and the next scheduled resupply.</p>
+    </div>
+    <div id="ship-band" class="ship-band"></div>
+    <div class="station-grid">
+      <div class="station-card" onclick="navigate('/station/maitri')">
+        <div class="head"><div><h3>Maitri</h3><div class="sub" id="sub-maitri">—</div></div>
+          <span class="status-badge unknown" id="badge-maitri">…</span></div>
+        <div id="body-maitri"></div>
+        <div class="enter-link">View station map &rarr;</div>
+      </div>
+      <div class="station-card" onclick="navigate('/station/bharati')">
+        <div class="head"><div><h3>Bharati</h3><div class="sub" id="sub-bharati">—</div></div>
+          <span class="status-badge unknown" id="badge-bharati">…</span></div>
+        <div id="body-bharati"></div>
+        <div class="enter-link">View station map &rarr;</div>
+      </div>
+    </div>
+  `;
+  refreshFn = patchHome;
+  await patchHome();
+}
+
+function renderShipCard(st) {
+  const ship = st.supply_ship || {};
+  const eta = ship.days_to_arrival;
+  const isDocked = ship.status && ship.status.startsWith("Docked");
+  const isDeparted = ship.status === "Departed";
+  let etaHtml;
+  if (isDocked) etaHtml = `<div class="sc-eta">Docked <small>unloading now</small></div>`;
+  else if (isDeparted) etaHtml = `<div class="sc-eta">Departed <small>preparing next voyage</small></div>`;
+  else if (eta != null) etaHtml = `<div class="sc-eta">${eta}<small> days out</small></div>`;
+  else etaHtml = `<div class="sc-eta">—</div>`;
+
+  const pct = ship.progress_pct != null ? ship.progress_pct : 0;
+  const warnHtml = st.early_warning ? `<div class="sc-warn">⚠ ${st.early_warning}</div>` : "";
+
+  return `
+    <div class="ship-card">
+      <div class="sc-top">
+        <div>
+          <div class="sc-label">Next Resupply &middot; ${st.display_name}</div>
+          <div class="sc-name">🚢 ${ship.ship_name || "—"}</div>
+        </div>
+        <span class="sc-status">${ship.status || "Unknown"}</span>
+      </div>
+      ${etaHtml}
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${Math.max(3, pct)}%"></div></div>
+      ${warnHtml}
+    </div>
+  `;
+}
+
+function renderStationBody(st) {
+  const critical = st.critical_component;
+  const attentionHtml = critical
+    ? `<div class="v"><span class="dot ${critical.level}"></span>${critical.label} &mdash; ${critical.room}</div>
+       <div class="meta">${fmtValue(critical)} &middot; ${LEVEL_LABEL[critical.level]}</div>`
+    : `<div class="v ok"><span class="dot nominal"></span>All systems nominal</div>`;
+
+  const resupplyHtml = st.resupply.map(r => `
+    <div class="resupply-chip ${r.level}">
+      <div class="k">${r.item} at current use</div>
+      <div class="v">${r.days_remaining != null ? r.days_remaining + " days" : "—"}</div>
+    </div>
+  `).join("");
+
+  return `
+    <div class="attention-block"><div class="k">Needs attention</div>${attentionHtml}</div>
+    <div class="resupply-row">${resupplyHtml}</div>
+  `;
+}
+
+async function patchHome() {
+  let overview;
+  try { overview = await api("/api/overview"); }
+  catch (e) {
+    document.getElementById("ship-band").innerHTML = "";
+    document.getElementById("body-maitri").innerHTML = connectionErrorBanner();
+    document.getElementById("body-bharati").innerHTML = "";
+    return;
+  }
+  document.getElementById("ship-band").innerHTML = overview.map(renderShipCard).join("");
+  overview.forEach(st => {
+    const subEl = document.getElementById(`sub-${st.station_id}`);
+    if (subEl) subEl.textContent = st.outside.temperature_c != null
+      ? `${st.outside.temperature_c}°C outside &middot; Day ${st.outside.day ?? "—"}` : "awaiting telemetry";
+    if (subEl) subEl.innerHTML = subEl.textContent; // safe, no markup needed but keeps parity
+    const badge = document.getElementById(`badge-${st.station_id}`);
+    if (badge) { badge.className = `status-badge ${st.overall_status}`; badge.textContent = LEVEL_LABEL[st.overall_status] || st.overall_status; }
+    const body = document.getElementById(`body-${st.station_id}`);
+    if (body) body.innerHTML = renderStationBody(st);
+  });
+}
+
+// ---------------------------------------------------------------------
+// STATION 3D VIEWER
+// ---------------------------------------------------------------------
+let threeLibs = null;
+async function ensureThree() {
+  if (threeLibs) return threeLibs;
+  const [THREE, gltfMod, orbitMod] = await Promise.all([
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"),
+  ]);
+  threeLibs = { THREE, GLTFLoader: gltfMod.GLTFLoader, OrbitControls: orbitMod.OrbitControls };
+  return threeLibs;
+}
+
+const STATUS_TINT = { critical: 0xb8323b, warning: 0xa86a06 };
+
+let viewer = null; // everything for the currently-mounted 3D scene, or null
+
+function disposeViewer() {
+  if (!viewer) return;
+  cancelAnimationFrame(viewer.rafId);
+  window.removeEventListener("resize", viewer.onResize);
+  viewer.canvas.removeEventListener("pointermove", viewer.onPointerMove);
+  viewer.canvas.removeEventListener("pointerleave", viewer.onPointerLeave);
+  viewer.canvas.removeEventListener("pointerdown", viewer.onPointerDown);
+  viewer.canvas.removeEventListener("pointerup", viewer.onPointerUp);
+  viewer.scene.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+    }
+  });
+  viewer.renderer.dispose();
+  viewer.hostEl.innerHTML = "";
+  viewer = null;
+}
+
+function tweenCameraTo(targetPos, targetLookAt, duration) {
+  if (!viewer) return;
+  viewer.tween = {
+    startPos: viewer.camera.position.clone(),
+    startTarget: viewer.controls.target.clone(),
+    endPos: targetPos.clone(),
+    endTarget: targetLookAt.clone(),
+    t0: performance.now(),
+    duration: duration || 650,
+  };
+}
+function applyTween() {
+  const tw = viewer.tween;
+  const elapsed = performance.now() - tw.t0;
+  let p = Math.min(1, elapsed / tw.duration);
+  p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2; // easeInOutQuad
+  viewer.camera.position.lerpVectors(tw.startPos, tw.endPos, p);
+  viewer.controls.target.lerpVectors(tw.startTarget, tw.endTarget, p);
+  if (p >= 1) viewer.tween = null;
+}
+
+function setView(preset) {
+  if (!viewer) return;
+  const d = viewer.sphereRadius * 2.3;
+  const dirs = {
+    iso: [0.62, 0.55, 0.62], top: [0.0001, 1, 0.0001],
+    front: [0, 0.15, 1], back: [0, 0.15, -1], left: [-1, 0.15, 0], right: [1, 0.15, 0],
+  };
+  const dir = dirs[preset] || dirs.iso;
+  const c = viewer.center;
+  const pos = new viewer.THREE.Vector3(c.x + dir[0] * d, c.y + dir[1] * d, c.z + dir[2] * d);
+  tweenCameraTo(pos, c);
+  document.querySelectorAll(".view-presets button").forEach(b => b.classList.toggle("active", b.dataset.view === preset));
+}
+
+function renderHoverPanel(roomId) {
+  const el = document.getElementById("room-hover-panel");
+  if (!el) return;
+  if (!roomId) {
+    el.innerHTML = `<div class="rhp-empty">Hover over a building to see its live status. Click to open full detail.</div>`;
+    return;
+  }
+  const meta = ROOM_META_BY_ID[roomId];
+  const data = viewer && viewer.roomStatus[roomId];
+  const title = meta ? `${meta.icon} ${meta.name}` : roomId;
+  if (!data) {
+    el.innerHTML = `<div class="rhp-head"><span class="rhp-title">${title}</span></div><div class="rhp-empty">Loading&hellip;</div>`;
+    return;
+  }
+  const body = data.components.length
+    ? data.components.map(c => `<div class="comp-row"><span class="left"><span class="dot ${c.level}"></span>${c.label}</span><span class="val">${fmtValue(c)}</span></div>`).join("")
+    : `<div class="note-text">${data.note || "No live telemetry for this area."}</div>`;
+  el.innerHTML = `<div class="rhp-head"><span class="rhp-title">${title}</span><span class="status-badge ${data.status}">${LEVEL_LABEL[data.status]}</span></div>${body}`;
+}
+
+function renderCriticalPopups() {
+  const host = document.getElementById("critical-popups");
+  if (!host || !viewer) return;
+  host.innerHTML = Object.entries(viewer.roomStatus).map(([roomId, data]) => {
+    if (data.status !== "critical" || !viewer.roomAnchors[roomId]) return "";
+    const worst = data.components.find(c => c.level === "critical") || data.components[0];
+    const text = worst ? `${worst.label}: ${fmtValue(worst)}` : "Needs attention";
+    return `<div class="critical-popup" id="crit-popup-${roomId}">&#9888; ${text}</div>`;
+  }).join("");
+}
+
+async function initViewer(stationId, hostEl) {
+  const { THREE, GLTFLoader, OrbitControls } = await ensureThree();
+  const cfg = MODEL_CONFIGS[stationId];
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xeef4f9);
+
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  hostEl.appendChild(renderer.domElement);
+
+  scene.add(new THREE.AmbientLight(0xdfeaf5, 0.8));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.3);
+  sun.position.set(1, 1.6, 1);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0xcfe3f5, 0.4);
+  fill.position.set(-1, 0.6, -1);
+  scene.add(fill);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  // full 360-degree freedom - no polar-angle restriction
+  controls.minPolarAngle = 0;
+  controls.maxPolarAngle = Math.PI;
+
+  const modelRoot = new THREE.Group();
+  scene.add(modelRoot);
+
+  const roomMeshes = {};        // room_id -> [mesh, ...]
+  const meshToRoom = new Map(); // mesh -> room_id
+  const roomAnchors = {};       // room_id -> THREE.Vector3 (world space center)
+  const roomOriginalColor = new Map(); // mesh -> THREE.Color
+
+  const gltf = await new GLTFLoader().loadAsync(cfg.path);
+  modelRoot.add(gltf.scene);
+  modelRoot.rotation.x = cfg.tiltFixX; // correct the Z-up export (see MODEL_CONFIGS comment)
+
+  gltf.scene.traverse(obj => {
+    if (!obj.isMesh) return;
+    const roomId = classifyNode(obj.name);
+    // clone so tinting one room's meshes never bleeds into another mesh
+    // that happens to share the same material instance
+    if (obj.material) obj.material = obj.material.clone();
+    if (roomId) {
+      (roomMeshes[roomId] = roomMeshes[roomId] || []).push(obj);
+      meshToRoom.set(obj, roomId);
+      if (obj.material && obj.material.color) roomOriginalColor.set(obj, obj.material.color.clone());
+    }
+  });
+
+  modelRoot.updateMatrixWorld(true);
+  const box3 = new THREE.Box3();
+  Object.keys(roomMeshes).forEach(roomId => {
+    box3.makeEmpty();
+    roomMeshes[roomId].forEach(m => box3.expandByObject(m));
+    roomAnchors[roomId] = box3.getCenter(new THREE.Vector3());
+  });
+
+  const overallBox = new THREE.Box3().setFromObject(modelRoot);
+  const center = overallBox.getCenter(new THREE.Vector3());
+  const sphere = overallBox.getBoundingSphere(new THREE.Sphere());
+  const dist = sphere.radius * 2.3;
+
+  controls.target.copy(center);
+  controls.minDistance = sphere.radius * 0.4;
+  controls.maxDistance = sphere.radius * 8;
+  camera.position.set(center.x + dist * 0.62, center.y + dist * 0.55, center.z + dist * 0.62);
+  camera.lookAt(center);
+  controls.update();
+
+  const raycaster = new THREE.Raycaster();
+  const mouse = new THREE.Vector2();
+  const allRoomMeshFlat = Object.values(roomMeshes).flat();
+
+  function resize() {
+    const w = hostEl.clientWidth, h = hostEl.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / Math.max(1, h);
+    camera.updateProjectionMatrix();
+  }
+  resize();
+
+  viewer = {
+    stationId, THREE, scene, camera, renderer, controls, center, sphereRadius: sphere.radius,
+    roomMeshes, meshToRoom, roomAnchors, hostEl, canvas: renderer.domElement,
+    hoveredRoomId: null, roomStatus: {}, tween: null, rafId: null, downPos: null,
+  };
+
+  function updateMouse(evt) {
+    const rect = viewer.canvas.getBoundingClientRect();
+    mouse.x = ((evt.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((evt.clientY - rect.top) / rect.height) * 2 + 1;
+  }
+
+  viewer.onPointerMove = (evt) => {
+    updateMouse(evt);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allRoomMeshFlat, false);
+    const roomId = hits.length ? meshToRoom.get(hits[0].object) : null;
+    if (roomId !== viewer.hoveredRoomId) {
+      viewer.hoveredRoomId = roomId;
+      renderHoverPanel(roomId);
+    }
+  };
+  viewer.onPointerLeave = () => { viewer.hoveredRoomId = null; renderHoverPanel(null); };
+  viewer.onPointerDown = (evt) => { viewer.downPos = { x: evt.clientX, y: evt.clientY }; };
+  viewer.onPointerUp = (evt) => {
+    if (!viewer.downPos) return;
+    const dx = evt.clientX - viewer.downPos.x, dy = evt.clientY - viewer.downPos.y;
+    if (Math.hypot(dx, dy) > 6) return; // was a drag/orbit, not a click
+    updateMouse(evt);
+    raycaster.setFromCamera(mouse, camera);
+    const hits = raycaster.intersectObjects(allRoomMeshFlat, false);
+    if (hits.length) {
+      const roomId = meshToRoom.get(hits[0].object);
+      if (roomId) navigate(`/station/${stationId}/room/${roomId}`);
+    }
+  };
+  viewer.canvas.addEventListener("pointermove", viewer.onPointerMove);
+  viewer.canvas.addEventListener("pointerleave", viewer.onPointerLeave);
+  viewer.canvas.addEventListener("pointerdown", viewer.onPointerDown);
+  viewer.canvas.addEventListener("pointerup", viewer.onPointerUp);
+  viewer.onResize = resize;
+  window.addEventListener("resize", viewer.onResize);
+
+  const clock = new THREE.Clock();
+  function applyStatusColors(t) {
+    const pulse = (Math.sin(t * 4.2) + 1) / 2; // 0..1, ~2 blinks/sec
+    Object.entries(roomMeshes).forEach(([roomId, meshes]) => {
+      const status = (viewer.roomStatus[roomId] || {}).status;
+      meshes.forEach(mesh => {
+        const orig = roomOriginalColor.get(mesh);
+        if (!orig || !mesh.material || !mesh.material.color) return;
+        if (status === "critical") {
+          mesh.material.color.copy(orig).lerp(new THREE.Color(STATUS_TINT.critical), 0.25 + pulse * 0.5);
+        } else if (status === "warning") {
+          mesh.material.color.copy(orig).lerp(new THREE.Color(STATUS_TINT.warning), 0.32);
+        } else if (viewer.hoveredRoomId === roomId) {
+          mesh.material.color.copy(orig).lerp(new THREE.Color(0xffffff), 0.18);
+        } else {
+          mesh.material.color.copy(orig);
+        }
+      });
+    });
+  }
+  function updatePopupPositions() {
+    const rect = viewer.canvas.getBoundingClientRect();
+    Object.keys(roomAnchors).forEach(roomId => {
+      const el = document.getElementById(`crit-popup-${roomId}`);
+      if (!el) return;
+      const v = roomAnchors[roomId].clone().project(camera);
+      if (v.z > 1 || v.z < -1) { el.style.display = "none"; return; }
+      const x = (v.x * 0.5 + 0.5) * rect.width;
+      const y = (-v.y * 0.5 + 0.5) * rect.height - 16;
+      el.style.left = `${x}px`;
+      el.style.top = `${y}px`;
+      el.style.display = "block";
+    });
+  }
+  function tick() {
+    viewer.rafId = requestAnimationFrame(tick);
+    const t = clock.getElapsedTime();
+    controls.update();
+    if (viewer.tween) applyTween();
+    applyStatusColors(t);
+    updatePopupPositions();
+    renderer.render(scene, camera);
+  }
+  tick();
+
+  return viewer;
+}
+
+async function mountStation(stationId) {
+  destroyCharts();
+  disposeViewer();
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Station 3D View</p>
+      <h2 id="station-title">${stationId.charAt(0).toUpperCase() + stationId.slice(1)}</h2>
+      <p class="sub">Drag to orbit, scroll to zoom &mdash; hover a building for live status, click for full detail.</p>
+    </div>
+    <div id="outside-strip-region"></div>
+    <div class="viewer-wrap">
+      <div id="viewer-canvas-host"></div>
+      <div class="viewer-loading" id="viewer-loading">Loading 3D model&hellip;</div>
+      <div class="view-presets" id="view-presets">
+        <button data-view="top">TOP</button>
+        <button data-view="front">FRONT</button>
+        <button data-view="back">BACK</button>
+        <button data-view="left">LEFT</button>
+        <button data-view="right">RIGHT</button>
+        <button data-view="iso" class="active">ISO</button>
+      </div>
+      <div class="room-hover-panel" id="room-hover-panel"><div class="rhp-empty">Hover over a building to see its live status. Click to open full detail.</div></div>
+      <div class="critical-popups" id="critical-popups"></div>
+      <div class="viewer-hint">Drag to orbit &middot; scroll to zoom &middot; click a building for detail</div>
+    </div>
+    <div class="legend-box">
+      <div class="grp">
+        <span class="grp-title">Status</span>
+        <span class="item"><span class="dot nominal"></span>Nominal</span>
+        <span class="item"><span class="dot warning"></span>Warning &mdash; tinted amber</span>
+        <span class="item"><span class="dot critical"></span>Critical &mdash; blinking red + alert popup</span>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("view-presets").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (btn) setView(btn.dataset.view);
+  });
+
+  const hostEl = document.getElementById("viewer-canvas-host");
+  try {
+    await initViewer(stationId, hostEl);
+    const loadingEl = document.getElementById("viewer-loading");
+    if (loadingEl) loadingEl.style.display = "none";
+  } catch (e) {
+    console.error("3D viewer failed to load", e);
+    const loadingEl = document.getElementById("viewer-loading");
+    if (loadingEl) loadingEl.textContent = "Couldn't load the 3D model — check your connection and reload.";
+  }
+
+  refreshFn = () => patchStation(stationId);
+  await patchStation(stationId);
+}
+
+async function patchStation(stationId) {
+  let data;
+  try { data = await api(`/api/stations/${stationId}/rooms`); }
+  catch (e) {
+    document.getElementById("outside-strip-region").innerHTML = connectionErrorBanner();
+    return;
+  }
+  renderBreadcrumb({ view: "station", station: stationId }, data.display_name);
+  const titleEl = document.getElementById("station-title");
+  if (titleEl) titleEl.textContent = data.display_name;
+  document.getElementById("outside-strip-region").innerHTML = renderOutsideStrip(data.outside);
+
+  if (viewer && viewer.stationId === stationId) {
+    viewer.roomStatus = {};
+    data.rooms.forEach(room => { viewer.roomStatus[room.id] = room; });
+    renderCriticalPopups();
+    if (viewer.hoveredRoomId) renderHoverPanel(viewer.hoveredRoomId);
+  }
+}
+
+// ---------------------------------------------------------------------
+// ROOM DETAIL
+// ---------------------------------------------------------------------
+function chartOptionsBase(dashed, color) {
+  return {
+    type: "line",
+    data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: dashed ? [5, 4] : [], tension: dashed ? 0.15 : 0, fill: false }] },
+    options: {
+      animation: false, responsive: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: {
+        x: { display: !dashed, grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 5, color: "#74889b" } },
+        y: { grid: { color: "#e2edf5" }, ticks: { font: { size: 10 }, color: "#74889b" } },
+      },
+    },
+  };
+}
+
+async function mountRoom(stationId, roomId) {
+  disposeViewer();
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="loading">Loading room detail&hellip;</div>`;
+
+  let roomData, predictData;
+  try {
+    [roomData, predictData] = await Promise.all([
+      api(`/api/stations/${stationId}/rooms/${roomId}`),
+      api(`/api/stations/${stationId}/rooms/${roomId}/predict`),
+    ]);
+  } catch (e) { app.innerHTML = connectionErrorBanner(); return; }
+
+  destroyCharts();
+  renderBreadcrumb({ view: "room", station: stationId, room: roomId }, roomData.display_name, roomData.room.name);
+
+  const room = roomData.room;
+  const nonNumeric = room.components.filter(c => !c.numeric);
+
+  const cardsHtml = predictData.predictions.map((p, i) => {
+    const horizons = ["7d", "30d", "90d"];
+    const horizonLabels = { "7d": "1 Week", "30d": "1 Month", "90d": "3 Months" };
+    const horizonHtml = horizons.map(h => `
+      <div class="horizon-pill ${p.horizon_levels[h]}" id="hp-${i}-${h}">
+        <div class="hk">${horizonLabels[h]}</div>
+        <div class="hv" id="hv-${i}-${h}">${p.horizons[h]}${p.unit ? " " + p.unit : ""}</div>
+      </div>
+    `).join("");
+    return `
+      <div class="comp-card">
+        <div class="cc-head"><span class="label">${p.label}</span><span class="status-badge ${p.current_level}" id="badge-${i}">${LEVEL_LABEL[p.current_level]}</span></div>
+        <div class="cc-value" id="value-${i}">${p.current}${p.unit ? " " + p.unit : ""}</div>
+        <div class="cc-narrative" id="narrative-${i}">${p.narrative}</div>
+        <div class="chart-row">
+          <div class="chart-box"><div class="ct-label">Recent Readings (last ~60 days)</div><canvas id="chart-recent-${i}"></canvas></div>
+          <div class="chart-box"><div class="ct-label">AI Projection &middot; next 90 days</div><canvas id="chart-proj-${i}"></canvas></div>
+        </div>
+        <div class="horizon-row">${horizonHtml}</div>
+      </div>
+    `;
+  }).join("");
+
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Room Detail</p>
+      <h2>${room.icon} ${room.name}</h2>
+      <p class="sub" id="room-sub">${roomData.display_name} &middot; live readings and AI-projected outlook</p>
+    </div>
+    <div id="outside-strip-region">${renderOutsideStrip(roomData.outside)}</div>
+    <div id="chip-row-region">${nonNumeric.length ? `<div class="chip-row">${nonNumeric.map(c => `<span class="status-chip"><span class="dot ${c.level}"></span>${c.label}: ${fmtValue(c)}</span>`).join("")}</div>` : ""}</div>
+    ${predictData.predictions.length
+      ? `<div class="section-label">Predictive Outlook</div><div class="comp-grid">${cardsHtml}</div>`
+      : `<div class="banner">No numeric telemetry to chart for this room yet &mdash; check back once readings arrive.</div>`}
+  `;
+
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.color = "#74889b";
+
+  const subsystems = [...new Set(predictData.predictions.map(p => p.subsystem))];
+  const historyBySubsystem = {};
+  await Promise.all(subsystems.map(async sub => {
+    try { historyBySubsystem[sub] = (await api(`/api/stations/${stationId}/history/${sub}?limit=60`)).records; }
+    catch (e) { historyBySubsystem[sub] = []; }
+  }));
+
+  predictData.predictions.forEach((p, i) => {
+    const records = historyBySubsystem[p.subsystem] || [];
+    const recentValues = records.map(r => r[p.key]).filter(v => v !== null && v !== undefined);
+
+    const recentCtx = document.getElementById(`chart-recent-${i}`);
+    if (recentCtx) {
+      const cfg = chartOptionsBase(false, "#1e7fb8");
+      cfg.data.labels = recentValues.map((_, idx) => idx + 1);
+      cfg.data.datasets[0].data = recentValues;
+      cfg.data.datasets[0].backgroundColor = "rgba(30,127,184,0.10)";
+      cfg.data.datasets[0].fill = true;
+      cfg.options.scales.x.display = false;
+      activeCharts[`recent-${i}`] = new Chart(recentCtx, cfg);
+    }
+    const projCtx = document.getElementById(`chart-proj-${i}`);
+    if (projCtx) {
+      const color = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+      const cfg = chartOptionsBase(true, color);
+      cfg.data.labels = p.graph.map(pt => `${pt.day}d`);
+      cfg.data.datasets[0].data = p.graph.map(pt => pt.value);
+      activeCharts[`proj-${i}`] = new Chart(projCtx, cfg);
+    }
+  });
+
+  refreshFn = () => patchRoom(stationId, roomId, predictData.predictions.map(p => p.subsystem));
+}
+
+async function patchRoom(stationId, roomId, subsystems) {
+  let roomData, predictData;
+  try {
+    [roomData, predictData] = await Promise.all([
+      api(`/api/stations/${stationId}/rooms/${roomId}`),
+      api(`/api/stations/${stationId}/rooms/${roomId}/predict`),
+    ]);
+  } catch (e) { return; } // transient - keep showing last good data
+
+  const outsideEl = document.getElementById("outside-strip-region");
+  if (outsideEl) outsideEl.innerHTML = renderOutsideStrip(roomData.outside);
+
+  const nonNumeric = roomData.room.components.filter(c => !c.numeric);
+  const chipEl = document.getElementById("chip-row-region");
+  if (chipEl) chipEl.innerHTML = nonNumeric.length
+    ? `<div class="chip-row">${nonNumeric.map(c => `<span class="status-chip"><span class="dot ${c.level}"></span>${c.label}: ${fmtValue(c)}</span>`).join("")}</div>` : "";
+
+  const uniqueSubsystems = [...new Set(subsystems)];
+  const historyBySubsystem = {};
+  await Promise.all(uniqueSubsystems.map(async sub => {
+    try { historyBySubsystem[sub] = (await api(`/api/stations/${stationId}/history/${sub}?limit=60`)).records; }
+    catch (e) { historyBySubsystem[sub] = []; }
+  }));
+
+  predictData.predictions.forEach((p, i) => {
+    const valueEl = document.getElementById(`value-${i}`);
+    if (valueEl) valueEl.textContent = `${p.current}${p.unit ? " " + p.unit : ""}`;
+    const narrEl = document.getElementById(`narrative-${i}`);
+    if (narrEl) narrEl.textContent = p.narrative;
+    const badgeEl = document.getElementById(`badge-${i}`);
+    if (badgeEl) { badgeEl.className = `status-badge ${p.current_level}`; badgeEl.textContent = LEVEL_LABEL[p.current_level]; }
+
+    ["7d", "30d", "90d"].forEach(h => {
+      const pill = document.getElementById(`hp-${i}-${h}`);
+      const val = document.getElementById(`hv-${i}-${h}`);
+      if (pill) pill.className = `horizon-pill ${p.horizon_levels[h]}`;
+      if (val) val.textContent = `${p.horizons[h]}${p.unit ? " " + p.unit : ""}`;
+    });
+
+    const records = historyBySubsystem[p.subsystem] || [];
+    const recentValues = records.map(r => r[p.key]).filter(v => v !== null && v !== undefined);
+    const recentChart = activeCharts[`recent-${i}`];
+    if (recentChart) {
+      recentChart.data.labels = recentValues.map((_, idx) => idx + 1);
+      recentChart.data.datasets[0].data = recentValues;
+      recentChart.update("none");
+    }
+    const projChart = activeCharts[`proj-${i}`];
+    if (projChart) {
+      projChart.data.labels = p.graph.map(pt => `${pt.day}d`);
+      projChart.data.datasets[0].data = p.graph.map(pt => pt.value);
+      projChart.data.datasets[0].borderColor = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+      projChart.update("none");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
+// live push
+// ---------------------------------------------------------------------
+function connectWebSocket() {
+  const ws = new WebSocket(WS_URL);
+  const el = document.getElementById("conn");
+  const txt = document.getElementById("conn-text");
+  ws.onopen = () => { el.classList.add("live"); txt.textContent = "live"; };
+  ws.onclose = () => { el.classList.remove("live"); txt.textContent = "disconnected — retrying"; setTimeout(connectWebSocket, 2000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = () => throttledRefresh();
+}
+
+window.addEventListener("hashchange", route);
+route();
+connectWebSocket();
+</script>
+</body>
+</html>
