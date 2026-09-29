@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Antarctic Stations Digital Twin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script> -->
+ <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    /* ---- ice-sheet / glacier-signage token system ---- */
+    --snow: #ffffff;
+    --ice-bg: #eef4f9;
+    --ice-bg-2: #e2edf5;
+    --panel: #ffffff;
+    --panel-2: #f4f9fc;
+    --line: #cbdce9;
+    --line-strong: #a9c2d6;
+    --ink: #0b2540;
+    --ink-soft: #3f5b74;
+    --ink-dim: #74889b;
+
+    --navy: #0b3a63;
+    --navy-2: #0e4c80;
+
+    --nominal: #1c8f5e;
+    --nominal-bg: #e2f6ec;
+    --nominal-line: #a9dfc4;
+    --warning: #a86a06;
+    --warning-bg: #fbedd3;
+    --warning-line: #edc888;
+    --critical: #b8323b;
+    --critical-bg: #fbe3e4;
+    --critical-line: #edaeb2;
+    --unknown: #74889b;
+    --unknown-bg: #eaf0f5;
+    --unknown-line: #cbdce9;
+
+    --display: 'Space Grotesk', sans-serif;
+    --body: 'Inter', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+
+    --fs-base: 16px;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+  body {
+    background: var(--ice-bg);
+    background-image:
+      radial-gradient(circle at 8% -6%, rgba(255,255,255,0.9), transparent 32%),
+      radial-gradient(circle at 100% 0%, rgba(255,255,255,0.7), transparent 30%);
+    color: var(--ink);
+    font-family: var(--body);
+    font-size: var(--fs-base);
+    min-height: 100vh;
+  }
+  a { color: inherit; }
+  button { font-family: inherit; cursor: pointer; }
+  ::selection { background: rgba(30, 127, 184, 0.22); }
+
+  /* ---------- header ---------- */
+  header.top {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px clamp(16px, 3vw, 40px);
+    background: var(--navy);
+    color: var(--snow);
+    border-bottom: 3px solid var(--navy-2);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; cursor: pointer; }
+  .brand .mark {
+    width: 38px; height: 38px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px; background: rgba(255,255,255,0.08);
+  }
+  .brand .titles h1 { font-family: var(--display); font-size: 18px; font-weight: 700; margin: 0; letter-spacing: 0.02em; }
+  .brand .titles p { margin: 0; font-size: 12.5px; color: rgba(255,255,255,0.72); }
+
+  .header-right { display: flex; align-items: center; gap: 20px; }
+  .conn { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: rgba(255,255,255,0.7); }
+  .conn .dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.4); }
+  .conn.live .dot { background: #6ee7a8; }
+  .conn.live { color: #a8f0c4; }
+
+  nav.breadcrumb { font-size: 12.5px; color: rgba(255,255,255,0.75); }
+  nav.breadcrumb button { background: none; border: none; color: rgba(255,255,255,0.75); font-size: 12.5px; font-family: var(--body); padding: 0; }
+  nav.breadcrumb button:hover { color: #ffffff; text-decoration: underline; }
+  nav.breadcrumb .current { color: #ffffff; font-weight: 600; }
+  nav.breadcrumb .sep { margin: 0 6px; color: rgba(255,255,255,0.4); }
+
+  /* ---------- layout shell (full width) ---------- */
+  main#app { width: 100%; max-width: 1900px; margin: 0 auto; padding: 24px clamp(16px, 3vw, 40px) 60px; }
+  .page-head { margin-bottom: 20px; }
+  .page-head .eyebrow { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-dim); margin: 0 0 6px; font-weight: 600; }
+  .page-head h2 { font-family: var(--display); font-size: clamp(24px, 3vw, 32px); margin: 0 0 4px; font-weight: 700; color: var(--navy); }
+  .page-head p.sub { margin: 0; color: var(--ink-soft); font-size: 15px; }
+
+  .banner { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 16px 18px; font-size: 14.5px; color: var(--ink-soft); margin-bottom: 18px; }
+  .banner.error { border-color: var(--critical-line); color: var(--critical); background: var(--critical-bg); }
+  .banner code { font-family: var(--mono); color: var(--ink); background: rgba(11,37,64,0.06); padding: 1px 5px; border-radius: 4px; }
+
+  /* ---------- outside conditions strip ---------- */
+  .outside-strip {
+    display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: center;
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 13px 20px; background: var(--panel);
+    margin-bottom: 22px; font-family: var(--mono); font-size: 14.5px;
+  }
+  .outside-strip .label { font-family: var(--body); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-dim); margin-right: 2px; font-weight: 700; }
+  .outside-strip .item { display: flex; align-items: center; gap: 6px; color: var(--ink); }
+  .outside-strip .item .icon { font-size: 15px; }
+  .outside-strip .day { color: var(--navy-2); font-weight: 700; }
+  .outside-strip .storm { color: var(--critical); font-family: var(--body); font-weight: 700; font-size: 12.5px; padding: 3px 10px; border: 1px solid var(--critical-line); background: var(--critical-bg); border-radius: 20px; }
+
+  /* ---------- status chip / dot ---------- */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 20px;
+    font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid transparent;
+  }
+  .status-badge.nominal { color: var(--nominal); background: var(--nominal-bg); border-color: var(--nominal-line); }
+  .status-badge.warning { color: var(--warning); background: var(--warning-bg); border-color: var(--warning-line); }
+  .status-badge.critical { color: var(--critical); background: var(--critical-bg); border-color: var(--critical-line); }
+  .status-badge.unknown { color: var(--unknown); background: var(--unknown-bg); border-color: var(--unknown-line); }
+
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex: none; display: inline-block; }
+  .dot.nominal { background: var(--nominal); } .dot.warning { background: var(--warning); }
+  .dot.critical { background: var(--critical); } .dot.unknown { background: var(--unknown); }
+
+  /* ---------- home: supply ship band ---------- */
+  .ship-band { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  @media (max-width: 780px) { .ship-band { grid-template-columns: 1fr; } }
+  .ship-card { border: 1px solid var(--navy-2); border-radius: 12px; padding: 18px 20px; background: linear-gradient(160deg, #0e4c80, #0b3a63); color: var(--snow); }
+  .ship-card .sc-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+  .ship-card .sc-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.12em; color: rgba(255,255,255,0.65); font-weight: 700; margin-bottom: 3px; }
+  .ship-card .sc-name { font-family: var(--display); font-size: 17px; font-weight: 700; }
+  .ship-card .sc-eta { font-family: var(--mono); font-size: 28px; font-weight: 700; }
+  .ship-card .sc-eta small { font-size: 13px; font-weight: 500; color: rgba(255,255,255,0.7); }
+  .ship-card .sc-status { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; background: rgba(255,255,255,0.15); }
+  .ship-card .sc-bar-track { height: 8px; border-radius: 5px; background: rgba(255,255,255,0.18); margin-top: 12px; overflow: hidden; }
+  .ship-card .sc-bar-fill { height: 100%; background: #6ee7a8; }
+  .ship-card .sc-warn { margin-top: 10px; font-size: 12.5px; color: #ffd7a8; background: rgba(255,255,255,0.08); padding: 8px 10px; border-radius: 8px; }
+
+  /* ---------- home: station cards ---------- */
+  .station-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 780px) { .station-grid { grid-template-columns: 1fr; } }
+
+  .station-card { border: 1px solid var(--line); background: var(--panel); border-radius: 14px; padding: 24px; cursor: pointer; }
+  .station-card:hover { border-color: var(--navy-2); }
+  .station-card .head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .station-card h3 { font-family: var(--display); font-size: 22px; margin: 0; color: var(--navy); }
+  .station-card .head .sub { font-size: 13px; color: var(--ink-dim); margin-top: 3px; font-family: var(--mono); }
+
+  .attention-block { border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; background: var(--panel-2); margin-bottom: 14px; }
+  .attention-block .k { font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 6px; font-weight: 700; }
+  .attention-block .v { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .attention-block .v.ok { color: var(--nominal); }
+  .attention-block .meta { font-size: 12.5px; color: var(--ink-soft); margin-top: 3px; font-family: var(--mono); }
+
+  .resupply-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .resupply-chip { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--panel-2); }
+  .resupply-chip .k { font-size: 11.5px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 700; }
+  .resupply-chip .v { font-family: var(--mono); font-size: 16px; font-weight: 700; margin-top: 3px; }
+  .resupply-chip.nominal .v { color: var(--nominal); }
+  .resupply-chip.warning .v { color: var(--warning); }
+  .resupply-chip.critical .v { color: var(--critical); }
+  .resupply-chip.unknown .v { color: var(--ink-dim); }
+
+  .enter-link { font-size: 13.5px; color: var(--navy-2); font-weight: 700; margin-top: 6px; }
+
+  /* ---------- station 3D viewer ---------- */
+  .viewer-wrap {
+    position: relative; border: 1px solid var(--line); border-radius: 14px;
+    background: var(--panel); margin-bottom: 20px; overflow: hidden;
+    height: min(72vh, 680px); min-height: 380px;
+  }
+  #viewer-canvas-host { position: absolute; inset: 0; }
+  #viewer-canvas-host canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+  #viewer-canvas-host canvas:active { cursor: grabbing; }
+
+  .viewer-loading {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    color: var(--ink-dim); font-size: 14px; background: var(--panel); z-index: 2;
+  }
+
+  /* view-preset box, top-right */
+  .view-presets {
+    position: absolute; top: 14px; right: 14px; z-index: 3;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    background: rgba(255,255,255,0.92); border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px; backdrop-filter: blur(3px); box-shadow: 0 2px 10px rgba(11,37,64,0.08);
+  }
+  .view-presets button {
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-soft);
+    font-size: 11px; font-weight: 700; letter-spacing: 0.03em; border-radius: 6px;
+    padding: 7px 6px; min-width: 52px;
+  }
+  .view-presets button:hover { border-color: var(--navy-2); color: var(--navy); }
+  .view-presets button.active { background: var(--navy); color: var(--snow); border-color: var(--navy); }
+
+  /* hover data panel, left side */
+  .room-hover-panel {
+    position: absolute; top: 14px; left: 14px; z-index: 3; width: 260px; max-width: calc(100% - 28px);
+    background: rgba(255,255,255,0.95); border: 1px solid var(--line); border-radius: 12px;
+    padding: 14px 16px; backdrop-filter: blur(3px); box-shadow: 0 2px 10px rgba(11,37,64,0.08);
+    font-size: 13px; pointer-events: none;
+  }
+  .room-hover-panel .rhp-empty { color: var(--ink-dim); font-size: 12.5px; line-height: 1.5; }
+  .room-hover-panel .rhp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .room-hover-panel .rhp-title { font-family: var(--display); font-weight: 700; font-size: 14.5px; color: var(--navy); }
+  .room-hover-panel .comp-row { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; padding: 3px 0; gap: 8px; }
+  .room-hover-panel .comp-row .left { display: flex; align-items: center; gap: 6px; color: var(--ink-soft); }
+  .room-hover-panel .comp-row .val { font-family: var(--mono); color: var(--ink); font-weight: 600; }
+  .room-hover-panel .note-text { font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+
+  /* floating critical-alert popups, projected from 3D positions */
+  .critical-popup {
+    position: absolute; z-index: 4; transform: translate(-50%, -100%); pointer-events: none;
+    background: var(--critical-bg); border: 1.5px solid var(--critical); color: var(--critical);
+    border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 700; white-space: nowrap;
+    box-shadow: 0 2px 8px rgba(184,50,59,0.25); display: none;
+  }
+  .critical-popup::after {
+    content: ''; position: absolute; left: 50%; bottom: -6px; transform: translateX(-50%);
+    border: 6px solid transparent; border-top-color: var(--critical);
+  }
+
+  .viewer-hint {
+    position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); z-index: 3;
+    font-size: 11.5px; color: var(--ink-dim); background: rgba(255,255,255,0.85);
+    border: 1px solid var(--line); border-radius: 20px; padding: 5px 14px;
+  }
+
+  .legend-box { display: flex; flex-wrap: wrap; gap: 16px 22px; margin-top: 16px; padding-top: 14px; border-top: 1px dashed var(--line); }
+  .legend-box .grp { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+  .legend-box .grp-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-dim); font-weight: 700; margin-right: 2px; }
+  .legend-box .item { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--ink-soft); }
+
+  /* ---------- room detail ---------- */
+  .chip-row { display: flex; flex-wrap: wrap; gap: 9px; margin-bottom: 26px; }
+  .status-chip { border: 1px solid var(--line); border-radius: 20px; padding: 7px 14px; font-size: 13.5px; display: flex; align-items: center; gap: 8px; background: var(--panel); }
+
+  .comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 900px) { .comp-grid { grid-template-columns: 1fr; } }
+
+  .comp-card { border: 1px solid var(--line); border-radius: 14px; padding: 20px 22px; background: var(--panel); }
+  .comp-card .cc-head { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 4px; gap: 10px; }
+  .comp-card .cc-head .label { font-family: var(--display); font-size: 16.5px; font-weight: 700; color: var(--navy); }
+  .comp-card .cc-value { font-family: var(--mono); font-size: 30px; font-weight: 700; margin: 3px 0 7px; }
+  .comp-card .cc-narrative { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 14px; line-height: 1.5; }
+
+  .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 560px) { .chart-row { grid-template-columns: 1fr; } }
+  .chart-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--panel-2); }
+  .chart-box .ct-label { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-dim); margin-bottom: 4px; font-weight: 700; }
+  .chart-box canvas { max-height: 130px; }
+
+  .horizon-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .horizon-pill { border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px; text-align: center; background: var(--panel-2); }
+  .horizon-pill .hk { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; }
+  .horizon-pill .hv { font-family: var(--mono); font-size: 16.5px; font-weight: 700; margin-top: 3px; }
+  .horizon-pill.nominal .hv { color: var(--nominal); }
+  .horizon-pill.warning .hv { color: var(--warning); }
+  .horizon-pill.critical .hv { color: var(--critical); }
+
+  .section-label { font-family: var(--display); font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-soft); margin: 32px 0 16px; display: flex; align-items: center; gap: 10px; }
+  .section-label::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  .loading { padding: 70px 0; text-align: center; color: var(--ink-dim); font-size: 14.5px; }
+
+  /* =================== v5 additions =================== */
+
+  /* --- page 1: stacked overview / text tracker / GPS map, filling the screen --- */
+  .home-stack { display: flex; flex-direction: column; gap: 20px; }
+  .home-stack .station-grid { margin: 0; }
+  .home-stack .ship-band { margin: 0; }
+  .map-panel { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); overflow: hidden; }
+  .map-panel-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+  .map-panel-head h3 { margin: 0; font-family: var(--display); font-size: 17px; color: var(--navy); }
+  .map-panel-head .route-line { font-size: 12.5px; color: var(--ink-soft); }
+  #ship-map { width: 100%; height: max(480px, calc(100vh - 200px)); background: #dcedf8; }
+  .map-legend { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 18px; border-top: 1px solid var(--line); font-size: 12.5px; color: var(--ink-soft); }
+  .map-legend .item { display: flex; align-items: center; gap: 6px; }
+  .map-legend .sw { width: 22px; height: 0; border-top: 3px solid; }
+  .map-legend .sw.dash { border-top-style: dashed; }
+  .ship-marker { font-size: 26px; line-height: 1; filter: drop-shadow(0 2px 3px rgba(11,37,64,0.45)); }
+  .port-marker { background: var(--navy); color: #fff; border-radius: 50%; width: 14px; height: 14px; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--navy); }
+  .port-marker.station { background: #b8323b; box-shadow: 0 0 0 1px #b8323b; width: 16px; height: 16px; }
+  .port-marker.staging { background: #a86a06; box-shadow: 0 0 0 1px #a86a06; }
+  .leaflet-tooltip.route-label { font-family: var(--body); font-weight: 600; font-size: 12px; color: var(--navy); border: 1px solid var(--line); }
+
+  /* --- page 2: bigger viewer, pins --- */
+  .viewer-wrap.big { height: max(520px, calc(100vh - 230px)); }
+  #pin-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: hidden; }
+  .pin {
+    position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px; display: none;
+  }
+  .pin .pin-dot {
+    width: 34px; height: 34px; border-radius: 50%; background: #fff; border: 3px solid var(--nominal);
+    display: flex; align-items: center; justify-content: center; font-size: 17px;
+    box-shadow: 0 2px 8px rgba(11,37,64,0.35);
+  }
+  .pin .pin-tail { width: 3px; height: 14px; background: var(--nominal); margin-top: -3px; }
+  .pin.warning .pin-dot { border-color: var(--warning); }
+  .pin.warning .pin-tail { background: var(--warning); }
+  .pin.critical .pin-dot { border-color: var(--critical); background: var(--critical-bg); animation: pinblink 0.9s ease-in-out infinite; }
+  .pin.critical .pin-tail { background: var(--critical); }
+  .pin.hovered .pin-dot { transform: scale(1.15); }
+  @keyframes pinblink {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(184,50,59,0.85), 0 2px 8px rgba(11,37,64,0.35); border-color: var(--critical); }
+    50% { box-shadow: 0 0 0 12px rgba(184,50,59,0), 0 2px 8px rgba(11,37,64,0.35); border-color: #ff8f8f; }
+  }
+  .pin .pin-alert {
+    position: absolute; bottom: 100%; left: 50%; transform: translate(-50%, -8px); margin-bottom: 4px;
+    background: var(--critical-bg); border: 1.5px solid var(--critical); color: var(--critical);
+    border-radius: 8px; padding: 6px 10px; font-size: 11.5px; font-weight: 700; white-space: nowrap; display: none;
+    box-shadow: 0 2px 8px rgba(184,50,59,0.25);
+  }
+  .pin .pin-alert small { display: block; font-weight: 500; opacity: 0.85; }
+  .pin.critical .pin-alert { display: block; }
+  .pin .pin-name {
+    background: rgba(255,255,255,0.92); border: 1px solid var(--line); border-radius: 10px; padding: 1px 8px;
+    font-size: 10.5px; font-weight: 700; color: var(--navy); white-space: nowrap; display: none;
+  }
+  .pin.hovered .pin-name { display: block; }
+
+  .calib-toggle {
+    position: absolute; bottom: 12px; right: 14px; z-index: 5; border: 1px solid var(--line); background: rgba(255,255,255,0.92);
+    border-radius: 8px; font-size: 11.5px; font-weight: 700; padding: 6px 10px; color: var(--ink-soft);
+  }
+  .calib-panel {
+    position: absolute; bottom: 48px; right: 14px; z-index: 5; width: 260px; display: none;
+    background: rgba(255,255,255,0.97); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; font-size: 12px;
+    box-shadow: 0 4px 16px rgba(11,37,64,0.18);
+  }
+  .calib-panel.open { display: block; }
+  .calib-panel select, .calib-panel button.copy { width: 100%; margin-bottom: 8px; padding: 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel-2); font-size: 12px; }
+  .calib-panel label { display: flex; justify-content: space-between; margin: 6px 0 2px; color: var(--ink-soft); font-weight: 600; }
+  .calib-panel input[type=range] { width: 100%; }
+  .calib-panel .hint { color: var(--ink-dim); font-size: 11px; line-height: 1.4; margin-top: 6px; }
+  .viewer-loading .bar { width: 220px; height: 6px; background: var(--line); border-radius: 4px; margin-top: 10px; overflow: hidden; }
+  .viewer-loading .bar > div { height: 100%; width: 0%; background: var(--navy-2); }
+  .viewer-loading { flex-direction: column; }
+  .auto-badge { position: absolute; bottom: 12px; left: 14px; z-index: 3; font-size: 11.5px; color: var(--ink-dim); background: rgba(255,255,255,0.85); border: 1px solid var(--line); border-radius: 20px; padding: 5px 12px; }
+
+  /* --- page 3: clickable metric cards --- */
+  .comp-card.clickable { cursor: pointer; }
+  .comp-card.clickable:hover { border-color: var(--navy-2); }
+  .comp-card .cc-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; font-size: 11.5px; color: var(--ink-dim); }
+  .comp-card .cc-foot .go { color: var(--navy-2); font-weight: 700; }
+  .model-tag { font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; padding: 2px 8px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-soft); }
+  .horizon-pill .hu { font-size: 11px; color: var(--ink-dim); margin-top: 2px; font-family: var(--mono); }
+  .anom { color: var(--warning); font-weight: 700; }
+
+  /* --- page 4: full-page metric --- */
+  .metric-hero { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  .metric-hero .big-value { font-family: var(--mono); font-size: clamp(38px, 5vw, 64px); font-weight: 700; line-height: 1; }
+  .metric-hero .sub-line { color: var(--ink-soft); font-size: 14.5px; margin-top: 8px; max-width: 900px; line-height: 1.5; }
+  .metric-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 1000px) { .metric-charts { grid-template-columns: 1fr; } }
+  .metric-charts .chart-box { padding: 14px 16px; background: var(--panel); border-radius: 14px; }
+  .metric-charts .chart-box .ct-label { font-size: 12px; margin-bottom: 8px; }
+  .metric-charts .chart-frame { position: relative; height: clamp(300px, 46vh, 520px); }
+  .metric-charts .chart-frame canvas { max-height: none; }
+  .horizon-row.large { gap: 14px; margin-bottom: 18px; }
+  .horizon-row.large .horizon-pill { padding: 18px 12px; border-radius: 12px; }
+  .horizon-row.large .horizon-pill .hk { font-size: 12.5px; }
+  .horizon-row.large .horizon-pill .hv { font-size: clamp(22px, 3vw, 34px); }
+  .horizon-row.large .horizon-pill .hu { font-size: 13px; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .detail-tile { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); }
+  .detail-tile .k { font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-dim); font-weight: 700; }
+  .detail-tile .v { font-family: var(--mono); font-size: 17px; font-weight: 700; margin-top: 4px; color: var(--ink); word-break: break-word; }
+  .analysis-card { border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 22px 26px; }
+  .analysis-card h3 { margin: 0 0 4px; font-family: var(--display); color: var(--navy); font-size: 19px; }
+  .analysis-card .model-line { color: var(--ink-dim); font-size: 12.5px; margin-bottom: 14px; }
+  .analysis-card p { font-size: 15.5px; line-height: 1.7; color: var(--ink); margin: 0 0 14px; max-width: 1100px; }
+  .analysis-card p:last-child { margin-bottom: 0; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand" onclick="navigate('/')">
+    <div class="mark">❄</div>
+    <div class="titles">
+      <h1>Antarctic Digital Twin</h1>
+      <p>Maitri &middot; Bharati Research Stations</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <nav class="breadcrumb" id="breadcrumb"></nav>
+    <div class="conn" id="conn"><span class="dot"></span><span id="conn-text">connecting&hellip;</span></div>
+  </div>
+</header>
+
+<main id="app"><div class="loading">Loading digital twin&hellip;</div></main>
+
+<script>
+const API_BASE = "http://192.168.1.5:8000";
+const WS_URL = "ws://192.168.1.5:8000/ws";
+
+const LEVEL_LABEL = { nominal: "Nominal", warning: "Warning", critical: "Critical", unknown: "Unknown" };
+const BOOL_LABELS = {
+  storm_warning: { true: "Active", false: "Clear" },
+  leak_detected: { true: "Leak", false: "Sealed" },
+  resupply_pending: { true: "Pending", false: "Stocked" },
+};
+// Room metadata mirrored from backend twin_state.ROOM_LAYOUTS (same for both
+// stations) - used for the hover-panel header and view-preset labeling.
+const ROOM_META = [
+  { id: "environment_zone", name: "Environment Zone", icon: "🌡️" },
+  { id: "auxiliary_facilities", name: "Summer Camp & Container Modules", icon: "🏕️" },
+  { id: "main_building", name: "Main Building", icon: "🏠" },
+  { id: "power_energy", name: "Power / Energy Plant", icon: "⚡" },
+  { id: "communication", name: "Communication", icon: "📡" },
+  { id: "fuel_system", name: "Fuel Farm & Station", icon: "🛢️" },
+  { id: "water_pump_house", name: "Water Pump House", icon: "💧" },
+  { id: "logistics_room", name: "Logistics & Supply Control", icon: "📦" },
+];
+const ROOM_META_BY_ID = Object.fromEntries(ROOM_META.map(r => [r.id, r]));
+
+// ---------------------------------------------------------------------
+// 3D station models (v5: AI-generated textured GLBs)
+// ---------------------------------------------------------------------
+// The v5 models are single fused meshes (one mesh, one texture - there are
+// no separate named buildings to pick), and their raw vertex data is already
+// Y-up (Y has the smallest extent), so no tilt correction is applied. If a
+// model ever appears lying on its side, set tiltFixX to -Math.PI / 2.
+const MODEL_CONFIGS = {
+  maitri: { path: "models/Meshy_AI_maitri_station_3d_0924143746_image-to-3d-texture.glb", tiltFixX: 0 },
+  bharati: { path: "models/Meshy_AI_Bharati_Antarctic_Res_0927184556_texture.glb", tiltFixX: 0 },
+};
+
+// Because the model is one mesh, rooms are marked with floating hotspot pins
+// instead of picking geometry. Each pin position is a fraction of the model's
+// bounding box: u = left->right (X), w = front->back (Z), lift = height above
+// the model's highest point as a fraction of its size. These are STARTING
+// POSITIONS - use the "Adjust pins" button on the station page to drag them
+// into place (saved in your browser) and copy the result back here.
+const DEFAULT_M_HOTSPOTS = {
+  environment_zone:     { u: 0.96,  w: 0.29,  lift: -0.03 },
+  main_building:        { u: 0.085, w: 0.46,  lift: 0 },
+  power_energy:         { u: 0.52,  w: 0.88,  lift: 0 },
+  communication:        { u: 0.835, w: 0.27,  lift: 0 },
+  fuel_system:          { u: 0.27,  w: 0.87,  lift: 0 },
+  water_pump_house:     { u: 0.885, w: 0.50,  lift: 0 },
+  auxiliary_facilities: { u: 0.88,  w: 0.745, lift: 0 },
+  logistics_room:       { u: 0.45,  w: 0.04,  lift: 0 },
+};
+const DEFAULT_B_HOTSPOTS = {
+  environment_zone:     { u: 0.585, w: 0.07,  lift: 0 },
+  main_building:        { u: 0.85,  w: 0.305, lift: 0 },
+  power_energy:         { u: 0.44,  w: 0.445, lift: 0 },
+  communication:        { u: 0.11,  w: 0.075, lift: 0 },
+  fuel_system:          { u: 0.945, w: 0.85,  lift: 0 },
+  water_pump_house:     { u: 0.78,  w: 0.845, lift: 0 },
+  auxiliary_facilities: { u: 0.435, w: 0.14,  lift: 0 },
+  logistics_room:       { u: 0.55,  w: 0.85,  lift: 0 },
+};
+const ROOM_HOTSPOTS = { maitri: DEFAULT_M_HOTSPOTS, bharati: DEFAULT_B_HOTSPOTS };
+
+function loadHotspots(stationId) {
+  const base = JSON.parse(JSON.stringify(ROOM_HOTSPOTS[stationId] || DEFAULT_HOTSPOTS));
+  try {
+    const saved = JSON.parse(localStorage.getItem(`hotspots:${stationId}`) || "null");
+    if (saved) Object.keys(saved).forEach(k => { if (base[k]) Object.assign(base[k], saved[k]); });
+  } catch (e) { /* storage unavailable - use defaults */ }
+  return base;
+}
+
+// ---------------------------------------------------------------------
+// router / mount state
+// ---------------------------------------------------------------------
+let currentMount = null;      // {view, station, room}
+let activeCharts = {};        // chart-id -> Chart instance (room view only)
+let refreshFn = null;         // the patch function for whatever is mounted now
+
+function navigate(path) { location.hash = "#" + path; }
+
+function parseRoute() {
+  const raw = location.hash.replace(/^#\/?/, "");
+  const parts = raw.split("/").filter(Boolean);
+  if (parts[0] === "station" && parts[1]) {
+    if (parts[2] === "room" && parts[3]) {
+      if (parts[4] === "metric" && parts[5]) return { view: "metric", station: parts[1], room: parts[3], metric: parts[5] };
+      return { view: "room", station: parts[1], room: parts[3] };
+    }
+    return { view: "station", station: parts[1] };
+  }
+  return { view: "home" };
+}
+function sameMount(a, b) {
+  return a && b && a.view === b.view && a.station === b.station && a.room === b.room && a.metric === b.metric;
+}
+
+function destroyCharts() { Object.values(activeCharts).forEach(c => c.destroy()); activeCharts = {}; }
+
+// every page mount starts by releasing whatever the previous page held
+// (Chart.js instances, the WebGL context, the Leaflet map)
+function teardownAll() {
+  destroyCharts();
+  disposeViewer();
+  disposeShipMap();
+}
+
+async function route() {
+  const r = parseRoute();
+  if (sameMount(r, currentMount)) return;
+  currentMount = r;
+  if (r.view === "home") await mountHome();
+  else if (r.view === "station") await mountStation(r.station);
+  else if (r.view === "room") await mountRoom(r.station, r.room);
+  else if (r.view === "metric") await mountMetric(r.station, r.room, r.metric);
+}
+
+let lastRefresh = 0;
+function throttledRefresh() {
+  const now = Date.now();
+  if (now - lastRefresh < 1500) return;
+  lastRefresh = now;
+  if (refreshFn) refreshFn();
+}
+
+// ---------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------
+async function api(path) {
+  const res = await fetch(API_BASE + path);
+  if (!res.ok) throw new Error(`${path} -> ${res.status}`);
+  return res.json();
+}
+
+function fmtValue(comp) {
+  const { key, value, unit } = comp;
+  if (value === null || value === undefined) return "—";
+  if (typeof value === "boolean") {
+    const map = BOOL_LABELS[key];
+    return map ? map[value] : (value ? "Yes" : "No");
+  }
+  if (typeof value === "number") {
+    const rounded = Number.isInteger(value) ? value : Math.round(value * 10) / 10;
+    return unit ? `${rounded} ${unit}` : `${rounded}`;
+  }
+  const str = String(value);
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function connectionErrorBanner() {
+  return `<div class="banner error">
+    Can't reach the digital twin backend at <code>${API_BASE}</code>.
+    Make sure MQTT, Postgres, the simulator, and <code>uvicorn main:app</code> are all running, then reload this page.
+  </div>`;
+}
+
+function renderOutsideStrip(outside) {
+  if (!outside) return "";
+  const items = [
+    ["🌡️", outside.temperature_c != null ? `${outside.temperature_c}°C` : "—"],
+    ["💨", outside.wind_speed_kmh != null ? `${outside.wind_speed_kmh} km/h` : "—"],
+    ["❄️", outside.snow_depth_cm != null ? `${outside.snow_depth_cm} cm snow` : "—"],
+    ["👁️", outside.visibility_km != null ? `${outside.visibility_km} km vis.` : "—"],
+    ["💦", outside.humidity_pct != null ? `${outside.humidity_pct}% humidity` : "—"],
+  ];
+  const itemsHtml = items.map(([icon, txt]) => `<span class="item"><span class="icon">${icon}</span>${txt}</span>`).join("");
+  const storm = outside.storm_warning ? `<span class="storm">⛈ Storm Warning</span>` : "";
+  const day = outside.day != null ? `<span class="item day">Day ${outside.day}</span>` : "";
+  return `<div class="outside-strip"><span class="label">Outside</span>${itemsHtml}${day}${storm}</div>`;
+}
+
+function renderBreadcrumb(route, stationName, roomName, metricLabel) {
+  const el = document.getElementById("breadcrumb");
+  if (route.view === "home") { el.innerHTML = `<span class="current">Overview</span>`; return; }
+  let html = `<button onclick="navigate('/')">Overview</button>`;
+  const st = stationName || route.station;
+  if (route.view === "station") {
+    html += `<span class="sep">/</span><span class="current">${st}</span>`;
+  } else if (route.view === "room") {
+    html += `<span class="sep">/</span><button onclick="navigate('/station/${route.station}')">${st}</button>`;
+    html += `<span class="sep">/</span><span class="current">${roomName || route.room}</span>`;
+  } else if (route.view === "metric") {
+    html += `<span class="sep">/</span><button onclick="navigate('/station/${route.station}')">${st}</button>`;
+    html += `<span class="sep">/</span><button onclick="navigate('/station/${route.station}/room/${route.room}')">${roomName || route.room}</button>`;
+    html += `<span class="sep">/</span><span class="current">${metricLabel || route.metric}</span>`;
+  }
+  el.innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// HOME
+// ---------------------------------------------------------------------
+async function mountHome() {
+  teardownAll();
+  renderBreadcrumb({ view: "home" });
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Live Overview</p>
+      <h2>Station Overview</h2>
+      <p class="sub">Condition of both stations, the next scheduled resupply, and the supply ship's live position.</p>
+    </div>
+    <div class="home-stack">
+      <div class="station-grid">
+        <div class="station-card" onclick="navigate('/station/maitri')">
+          <div class="head"><div><h3>Maitri</h3><div class="sub" id="sub-maitri">—</div></div>
+            <span class="status-badge unknown" id="badge-maitri">…</span></div>
+          <div id="body-maitri"></div>
+          <div class="enter-link">Open 3D station view &rarr;</div>
+        </div>
+        <div class="station-card" onclick="navigate('/station/bharati')">
+          <div class="head"><div><h3>Bharati</h3><div class="sub" id="sub-bharati">—</div></div>
+            <span class="status-badge unknown" id="badge-bharati">…</span></div>
+          <div id="body-bharati"></div>
+          <div class="enter-link">Open 3D station view &rarr;</div>
+        </div>
+      </div>
+
+      <div id="ship-band" class="ship-band"></div>
+
+      <div class="map-panel">
+        <div class="map-panel-head">
+          <h3>🛰 Live Supply-Ship Tracker</h3>
+          <span class="route-line">NCPOR Goa &rarr; Indian ports &rarr; Cape Town &rarr; Antarctica (MV Golovnin) &rarr; Maitri / Bharati</span>
+        </div>
+        <div id="ship-map"></div>
+        <div class="map-legend">
+          <span class="item"><span class="sw" style="border-color:#0e4c80"></span>Maitri voyage (sailed)</span>
+          <span class="item"><span class="sw dash" style="border-color:#0e4c80"></span>Maitri (remaining)</span>
+          <span class="item"><span class="sw" style="border-color:#1c8f5e"></span>Bharati voyage (sailed)</span>
+          <span class="item"><span class="sw dash" style="border-color:#1c8f5e"></span>Bharati (remaining)</span>
+          <span class="item">🚢 ship &nbsp;&middot;&nbsp; route is illustrative, position interpolated from voyage progress</span>
+        </div>
+      </div>
+    </div>
+  `;
+  initShipMap();
+  refreshFn = patchHome;
+  await patchHome();
+}
+
+// ---------------- live GPS ship map (Leaflet) ----------------
+let shipMap = null; // { map, ships: {stationId: {marker, done, remaining}}, built: bool }
+const ROUTE_COLORS = { maitri: "#0e4c80", bharati: "#1c8f5e" };
+
+function disposeShipMap() {
+  if (shipMap) { try { shipMap.map.remove(); } catch (e) {} shipMap = null; }
+}
+
+function initShipMap() {
+  const host = document.getElementById("ship-map");
+  if (!host) return;
+  if (typeof L === "undefined") {
+    host.innerHTML = `<div class="loading">The map library couldn't load — check your internet connection and reload.</div>`;
+    return;
+  }
+  const map = L.map(host, { worldCopyJump: true, zoomSnap: 0.25 }).setView([-25, 45], 3);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 8, attribution: "&copy; OpenStreetMap contributors",
+  }).addTo(map);
+  shipMap = { map, ships: {}, built: false };
+}
+
+function shipTooltipHtml(st) {
+  const s = st.supply_ship || {};
+  const eta = ["In Transit", "Delayed (Weather)"].includes(s.status) ? `${s.days_to_arrival} days to arrival` : s.status;
+  return `<b>${s.ship_name || "Ship"}</b> &rarr; ${st.display_name}<br>${s.status || ""} &middot; ${eta}<br>${s.geo ? s.geo.leg : ""}`;
+}
+
+function updateShipMap(overview) {
+  if (!shipMap) return;
+  const { map } = shipMap;
+  const allPoints = [];
+
+  if (!shipMap.built) {
+    const seen = new Set();
+    overview.forEach(st => {
+      const geo = st.supply_ship && st.supply_ship.geo;
+      if (!geo) return;
+      const color = ROUTE_COLORS[st.station_id] || "#0e4c80";
+      const full = geo.waypoints.map(w => [w.lat, w.lng]);
+      full.forEach(p => allPoints.push(p));
+      const remaining = L.polyline(full, { color, weight: 3, opacity: 0.55, dashArray: "8 8" }).addTo(map);
+      const done = L.polyline(geo.path_done.map(p => [p.lat, p.lng]), { color, weight: 5, opacity: 0.95 }).addTo(map);
+      geo.waypoints.forEach(w => {
+        if (w.kind === "sea" || w.kind === "port") return;   // curve points / duplicate of Goa
+        const key = w.label;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const icon = L.divIcon({ className: "", html: `<div class="port-marker ${w.kind}"></div>`, iconSize: [16, 16], iconAnchor: [8, 8] });
+        const label = w.kind === "origin" ? "NCPOR, Goa (Indian ports)" : w.label;
+        L.marker([w.lat, w.lng], { icon }).addTo(map)
+          .bindTooltip(`${label}${w.note ? "<br><small>" + w.note + "</small>" : ""}`, { permanent: true, direction: "right", offset: [10, 0], className: "route-label" });
+      });
+      const shipIcon = L.divIcon({ className: "", html: `<div class="ship-marker">🚢</div>`, iconSize: [28, 28], iconAnchor: [14, 14] });
+      const marker = L.marker([geo.position.lat, geo.position.lng], { icon: shipIcon, zIndexOffset: 1000 }).addTo(map)
+        .bindTooltip(shipTooltipHtml(st), { direction: "top", offset: [0, -14] });
+      shipMap.ships[st.station_id] = { marker, done, remaining };
+    });
+    if (allPoints.length) map.fitBounds(L.latLngBounds(allPoints), { padding: [40, 40] });
+    shipMap.built = true;
+    return;
+  }
+
+  overview.forEach(st => {
+    const geo = st.supply_ship && st.supply_ship.geo;
+    const layer = shipMap.ships[st.station_id];
+    if (!geo || !layer) return;
+    layer.marker.setLatLng([geo.position.lat, geo.position.lng]);
+    layer.marker.setTooltipContent(shipTooltipHtml(st));
+    layer.done.setLatLngs(geo.path_done.map(p => [p.lat, p.lng]));
+  });
+}
+
+function renderShipCard(st) {
+  const ship = st.supply_ship || {};
+  const eta = ship.days_to_arrival;
+  const isDocked = ship.status && ship.status.startsWith("Docked");
+  const isDeparted = ship.status === "Departed";
+  let etaHtml;
+  if (isDocked) etaHtml = `<div class="sc-eta">Docked <small>unloading now</small></div>`;
+  else if (isDeparted) etaHtml = `<div class="sc-eta">Departed <small>preparing next voyage</small></div>`;
+  else if (eta != null) etaHtml = `<div class="sc-eta">${eta}<small> days out</small></div>`;
+  else etaHtml = `<div class="sc-eta">—</div>`;
+
+  const pct = ship.progress_pct != null ? ship.progress_pct : 0;
+  const warnHtml = st.early_warning ? `<div class="sc-warn">⚠ ${st.early_warning}</div>` : "";
+
+  return `
+    <div class="ship-card">
+      <div class="sc-top">
+        <div>
+          <div class="sc-label">Next Resupply &middot; ${st.display_name}</div>
+          <div class="sc-name">🚢 ${ship.ship_name || "—"}</div>
+        </div>
+        <span class="sc-status">${ship.status || "Unknown"}</span>
+      </div>
+      ${etaHtml}
+      ${ship.geo ? `<div style="font-size:12.5px;color:rgba(255,255,255,0.75);margin-top:6px;">📍 ${ship.geo.leg}</div>` : ""}
+      <div class="sc-bar-track"><div class="sc-bar-fill" style="width:${Math.max(3, pct)}%"></div></div>
+      ${warnHtml}
+    </div>
+  `;
+}
+
+function renderStationBody(st) {
+  const critical = st.critical_component;
+  const attentionHtml = critical
+    ? `<div class="v"><span class="dot ${critical.level}"></span>${critical.label} &mdash; ${critical.room}</div>
+       <div class="meta">${fmtValue(critical)} &middot; ${LEVEL_LABEL[critical.level]}</div>`
+    : `<div class="v ok"><span class="dot nominal"></span>All systems nominal</div>`;
+
+  const resupplyHtml = st.resupply.map(r => `
+    <div class="resupply-chip ${r.level}">
+      <div class="k">${r.item} at current use</div>
+      <div class="v">${r.days_remaining != null ? r.days_remaining + " days" : "—"}</div>
+    </div>
+  `).join("");
+
+  return `
+    <div class="attention-block"><div class="k">Needs attention</div>${attentionHtml}</div>
+    <div class="resupply-row">${resupplyHtml}</div>
+  `;
+}
+
+async function patchHome() {
+  let overview;
+  try { overview = await api("/api/overview"); }
+  catch (e) {
+    const band = document.getElementById("ship-band");
+    if (band) band.innerHTML = "";
+    const b1 = document.getElementById("body-maitri");
+    if (b1) b1.innerHTML = connectionErrorBanner();
+    const b2 = document.getElementById("body-bharati");
+    if (b2) b2.innerHTML = "";
+    return;
+  }
+  const band = document.getElementById("ship-band");
+  if (band) band.innerHTML = overview.map(renderShipCard).join("");
+  overview.forEach(st => {
+    const subEl = document.getElementById(`sub-${st.station_id}`);
+    if (subEl) subEl.textContent = st.outside.temperature_c != null
+      ? `${st.outside.temperature_c}°C outside · Day ${st.outside.day ?? "—"}` : "awaiting telemetry";
+    const badge = document.getElementById(`badge-${st.station_id}`);
+    if (badge) { badge.className = `status-badge ${st.overall_status}`; badge.textContent = LEVEL_LABEL[st.overall_status] || st.overall_status; }
+    const body = document.getElementById(`body-${st.station_id}`);
+    if (body) body.innerHTML = renderStationBody(st);
+  });
+  updateShipMap(overview);
+}
+
+// ---------------------------------------------------------------------
+// STATION 3D VIEWER (v5)
+// ---------------------------------------------------------------------
+let threeLibs = null;
+async function ensureThree() {
+  if (threeLibs) return threeLibs;
+  const [THREE, gltfMod, orbitMod] = await Promise.all([
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/loaders/GLTFLoader.js"),
+    import("https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/controls/OrbitControls.js"),
+  ]);
+  threeLibs = { THREE, GLTFLoader: gltfMod.GLTFLoader, OrbitControls: orbitMod.OrbitControls };
+  return threeLibs;
+}
+
+let viewer = null; // everything for the currently-mounted 3D scene, or null
+
+// why a critical reading is critical, in plain words (shown in the red popup)
+const CRITICAL_REASONS = {
+  fuel_pct: "below the 10% critical reserve", water_reserve_pct: "below the 15% critical reserve",
+  leak_detected: "fuel leak detected", generator_status: "generator fault", power_grid_status: "power grid fault",
+  grid_frequency_hz: "grid frequency lost / out of range", storm_warning: "storm in progress",
+  structural_health_index: "below the 65 critical limit", wind_speed_kmh: "wind at or above 90 km/h",
+  visibility_km: "whiteout — 1 km or less", temperature_c: "at or below -50 °C",
+  cold_storage_temp_c: "cold room too warm — food at risk", rfid_boxes_flagged: "many boxes unaccounted for",
+  logistics_health_pct: "overall supply health under 40%", food_autonomy_days: "under 5 days of food left",
+  est_days_remaining: "under 5 days of fuel left", snow_depth_cm: "heavy snow load",
+};
+function criticalReason(c) {
+  if (CRITICAL_REASONS[c.key]) return CRITICAL_REASONS[c.key];
+  if (/_pct$/.test(c.key)) return "below the 10% critical stock level";
+  return "needs immediate attention";
+}
+
+function disposeViewer() {
+  if (!viewer) return;
+  cancelAnimationFrame(viewer.rafId);
+  if (viewer.resizeObserver) viewer.resizeObserver.disconnect();
+  if (viewer.controls) viewer.controls.dispose();
+  viewer.scene.traverse(obj => {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      mats.forEach(m => {
+        Object.values(m).forEach(v => { if (v && v.isTexture) v.dispose(); });
+        m.dispose();
+      });
+    }
+  });
+  viewer.renderer.dispose();
+  try { viewer.renderer.forceContextLoss(); } catch (e) {}
+  if (viewer.hostEl) viewer.hostEl.innerHTML = "";
+  viewer = null;
+}
+
+function tweenCameraTo(targetPos, targetLookAt, duration) {
+  if (!viewer) return;
+  viewer.tween = {
+    startPos: viewer.camera.position.clone(), startTarget: viewer.controls.target.clone(),
+    endPos: targetPos.clone(), endTarget: targetLookAt.clone(),
+    t0: performance.now(), duration: duration || 700,
+  };
+}
+function applyTween() {
+  const tw = viewer.tween;
+  let p = Math.min(1, (performance.now() - tw.t0) / tw.duration);
+  p = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+  viewer.camera.position.lerpVectors(tw.startPos, tw.endPos, p);
+  viewer.controls.target.lerpVectors(tw.startTarget, tw.endTarget, p);
+  if (p >= 1) viewer.tween = null;
+}
+
+function setAutoRotate(on, byUser) {
+  if (!viewer) return;
+  viewer.controls.autoRotate = on;
+  if (byUser !== undefined) viewer.userPaused = !on;
+  const badge = document.getElementById("auto-badge");
+  if (badge) {
+    badge.innerHTML = on ? "⟳ Auto-rotating — drag to take control"
+      : `Rotation paused &nbsp;<a href="#" id="resume-rot" style="color:var(--navy-2);font-weight:700;">▶ resume</a>`;
+    const r = document.getElementById("resume-rot");
+    if (r) r.onclick = (e) => { e.preventDefault(); setAutoRotate(true, true); };
+  }
+}
+
+function setView(preset) {
+  if (!viewer) return;
+  const d = viewer.sphereRadius * 2.1;
+  const dirs = {
+    iso: [0.62, 0.62, 0.62], top: [0.0001, 1, 0.0001],
+    front: [0, 0.18, 1], back: [0, 0.18, -1], left: [-1, 0.18, 0], right: [1, 0.18, 0],
+  };
+  const dir = dirs[preset] || dirs.iso;
+  const c = viewer.center;
+  tweenCameraTo(new viewer.THREE.Vector3(c.x + dir[0] * d, c.y + dir[1] * d, c.z + dir[2] * d), c);
+  setAutoRotate(false, true);   // the user chose a view, so stop spinning
+  document.querySelectorAll(".view-presets button").forEach(b => b.classList.toggle("active", b.dataset.view === preset));
+}
+
+function renderHoverPanel(roomId) {
+  const el = document.getElementById("room-hover-panel");
+  if (!el) return;
+  if (!roomId) {
+    el.innerHTML = `<div class="rhp-empty">Hover a pin to see that area's live status. Click a pin to open its full detail.</div>`;
+    return;
+  }
+  const meta = ROOM_META_BY_ID[roomId];
+  const data = viewer && viewer.roomStatus[roomId];
+  const title = meta ? `${meta.icon} ${meta.name}` : roomId;
+  if (!data) {
+    el.innerHTML = `<div class="rhp-head"><span class="rhp-title">${title}</span></div><div class="rhp-empty">Loading&hellip;</div>`;
+    return;
+  }
+  // brief view: the most important readings first (worst status on top), capped so it fits on screen
+  const rank = { critical: 3, warning: 2, nominal: 1, unknown: 0 };
+  const comps = [...data.components].sort((a, b) => rank[b.level] - rank[a.level]);
+  const MAX = 9;
+  const shown = comps.slice(0, MAX);
+  const body = comps.length
+    ? shown.map(c => `<div class="comp-row"><span class="left"><span class="dot ${c.level}"></span>${c.label}</span><span class="val">${fmtValue(c)}</span></div>`).join("")
+      + (comps.length > MAX ? `<div class="note-text" style="margin-top:6px;">+ ${comps.length - MAX} more — click for full detail</div>` : "")
+    : `<div class="note-text">${data.note || "No live telemetry for this area."}</div>`;
+  el.innerHTML = `<div class="rhp-head"><span class="rhp-title">${title}</span><span class="status-badge ${data.status}">${LEVEL_LABEL[data.status]}</span></div>${body}`;
+}
+
+function setHover(roomId) {
+  if (!viewer) return;
+  viewer.hoveredRoomId = roomId;
+  document.querySelectorAll(".pin").forEach(p => p.classList.toggle("hovered", p.dataset.room === roomId));
+  renderHoverPanel(roomId);
+  if (roomId) { if (viewer.controls.autoRotate) { viewer.controls.autoRotate = false; viewer.resumeAfterHover = true; } }
+  else if (viewer.resumeAfterHover && !viewer.userPaused) { viewer.controls.autoRotate = true; viewer.resumeAfterHover = false; }
+}
+
+// re-colour pins and rebuild critical popups from the latest room data
+function refreshPins() {
+  if (!viewer) return;
+  Object.keys(viewer.anchors).forEach(roomId => {
+    const el = document.getElementById(`pin-${roomId}`);
+    if (!el) return;
+    const data = viewer.roomStatus[roomId];
+    const status = data ? data.status : "unknown";
+    const hovered = viewer.hoveredRoomId === roomId;
+    el.className = `pin ${status}${hovered ? " hovered" : ""}`;
+    const alertEl = el.querySelector(".pin-alert");
+    if (alertEl) {
+      if (status === "critical" && data) {
+        const worst = data.components.find(c => c.level === "critical") || data.components[0];
+        alertEl.innerHTML = worst ? `⚠ ${worst.label}: ${fmtValue(worst)}<small>${criticalReason(worst)}</small>` : "⚠ Needs attention";
+      } else alertEl.innerHTML = "";
+    }
+  });
+}
+
+function computeAnchors() {
+  const { THREE, modelRoot, hotspots, box, sphereRadius, raycaster } = viewer;
+  const size = box.getSize(new THREE.Vector3());
+  Object.keys(hotspots).forEach(roomId => {
+    const h = hotspots[roomId];
+    const x = box.min.x + h.u * size.x;
+    const z = box.min.z + h.w * size.z;
+    let surfaceY = box.max.y;
+    try {
+      raycaster.set(new THREE.Vector3(x, box.max.y + size.y + 1, z), new THREE.Vector3(0, -1, 0));
+      const hit = raycaster.intersectObject(modelRoot, true)[0];
+      if (hit) surfaceY = hit.point.y;
+    } catch (e) { /* fall back to the bounding-box top */ }
+    viewer.anchors[roomId] = new THREE.Vector3(x, surfaceY + h.lift * sphereRadius * 2, z);
+  });
+}
+
+function buildPins(layerEl, stationId) {
+  layerEl.innerHTML = ROOM_META.map(rm => `
+    <div class="pin" id="pin-${rm.id}" data-room="${rm.id}">
+      <div class="pin-alert"></div>
+      <div class="pin-name">${rm.name}</div>
+      <div class="pin-dot">${rm.icon}</div>
+      <div class="pin-tail"></div>
+    </div>`).join("");
+  const isTouch = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  layerEl.querySelectorAll(".pin").forEach(pin => {
+    const id = pin.dataset.room;
+    pin.addEventListener("mouseenter", () => { if (!isTouch) setHover(id); });
+    pin.addEventListener("mouseleave", () => { if (!isTouch) setHover(null); });
+    pin.addEventListener("click", () => {
+      // touch screens have no hover: first tap previews, second tap opens
+      if (isTouch && viewer && viewer.hoveredRoomId !== id) { setHover(id); return; }
+      navigate(`/station/${stationId}/room/${id}`);
+    });
+  });
+}
+
+function setupCalibration(stationId) {
+  const toggle = document.getElementById("calib-toggle");
+  const panel = document.getElementById("calib-panel");
+  if (!toggle || !panel) return;
+  const sel = document.getElementById("calib-room");
+  sel.innerHTML = ROOM_META.map(r => `<option value="${r.id}">${r.icon} ${r.name}</option>`).join("");
+  const u = document.getElementById("calib-u"), w = document.getElementById("calib-w"), l = document.getElementById("calib-l");
+  const load = () => {
+    const h = viewer.hotspots[sel.value];
+    u.value = h.u; w.value = h.w; l.value = h.lift;
+  };
+  const apply = () => {
+    const h = viewer.hotspots[sel.value];
+    h.u = parseFloat(u.value); h.w = parseFloat(w.value); h.lift = parseFloat(l.value);
+    computeAnchors();
+  };
+  const save = () => { try { localStorage.setItem(`hotspots:${stationId}`, JSON.stringify(viewer.hotspots)); } catch (e) {} };
+  toggle.onclick = () => { panel.classList.toggle("open"); if (panel.classList.contains("open")) load(); };
+  sel.onchange = load;
+  [u, w, l].forEach(inp => { inp.oninput = apply; inp.onchange = () => { apply(); save(); }; });
+  document.getElementById("calib-copy").onclick = async () => {
+    const txt = JSON.stringify(viewer.hotspots, null, 2);
+    try { await navigator.clipboard.writeText(txt); } catch (e) {}
+    console.log(`Hotspot positions for ${stationId}:\n` + txt);
+    document.getElementById("calib-copy").textContent = "Copied ✓ (also in console)";
+    setTimeout(() => { const b = document.getElementById("calib-copy"); if (b) b.textContent = "Copy positions as JSON"; }, 1800);
+  };
+  document.getElementById("calib-reset").onclick = () => {
+    try { localStorage.removeItem(`hotspots:${stationId}`); } catch (e) {}
+    viewer.hotspots = loadHotspots(stationId); computeAnchors(); load();
+  };
+}
+
+async function initViewer(stationId, hostEl, onProgress) {
+  const { THREE, GLTFLoader, OrbitControls } = await ensureThree();
+  const cfg = MODEL_CONFIGS[stationId];
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0xdbe8f2);
+
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.01, 500);
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  hostEl.appendChild(renderer.domElement);
+
+  scene.add(new THREE.HemisphereLight(0xffffff, 0xb9cde0, 1.0));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.5);
+  sun.position.set(2, 3, 1.5);
+  scene.add(sun);
+  scene.add(new THREE.AmbientLight(0xdfeaf5, 0.35));
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minPolarAngle = 0;               // full 360-degree freedom
+  controls.maxPolarAngle = Math.PI;
+  controls.autoRotate = true;               // slow spin by default
+  controls.autoRotateSpeed = 0.9;
+
+  const modelRoot = new THREE.Group();
+  scene.add(modelRoot);
+
+  const gltf = await new Promise((resolve, reject) => {
+    new GLTFLoader().load(cfg.path, resolve,
+      (xhr) => { if (onProgress && xhr.total) onProgress(xhr.loaded / xhr.total); }, reject);
+  });
+  modelRoot.add(gltf.scene);
+  modelRoot.rotation.x = cfg.tiltFixX;
+  const maxAniso = renderer.capabilities.getMaxAnisotropy();
+  gltf.scene.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    mats.forEach(m => { ["map", "normalMap", "roughnessMap", "metalnessMap"].forEach(k => { if (m[k]) m[k].anisotropy = maxAniso; }); });
+  });
+
+  modelRoot.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(modelRoot);
+  const center = box.getCenter(new THREE.Vector3());
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const d = sphere.radius * 2.1;
+
+  camera.near = sphere.radius / 200;
+  camera.far = sphere.radius * 60;
+  camera.updateProjectionMatrix();
+  controls.target.copy(center);
+  controls.minDistance = sphere.radius * 0.35;
+  controls.maxDistance = sphere.radius * 6;
+  camera.position.set(center.x + d * 0.62, center.y + d * 0.62, center.z + d * 0.62);
+  camera.lookAt(center);
+  controls.update();
+
+  viewer = {
+    stationId, THREE, scene, camera, renderer, controls, modelRoot, box, center,
+    sphereRadius: sphere.radius, hostEl, raycaster: new THREE.Raycaster(),
+    hotspots: loadHotspots(stationId), anchors: {}, roomStatus: {},
+    hoveredRoomId: null, tween: null, rafId: null, userPaused: false, resumeAfterHover: false,
+  };
+  computeAnchors();
+
+  controls.addEventListener("start", () => { setAutoRotate(false, true); viewer.tween = null; });
+
+  const resize = () => {
+    const w = hostEl.clientWidth, h = hostEl.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+  resize();
+  viewer.resizeObserver = new ResizeObserver(resize);
+  viewer.resizeObserver.observe(hostEl);
+
+  function updatePins() {
+    const w = hostEl.clientWidth, h = hostEl.clientHeight;
+    Object.keys(viewer.anchors).forEach(roomId => {
+      const el = document.getElementById(`pin-${roomId}`);
+      if (!el) return;
+      const v = viewer.anchors[roomId].clone().project(camera);
+      if (v.z > 1 || v.z < -1) { el.style.display = "none"; return; }
+      el.style.display = "flex";
+      el.style.left = `${(v.x * 0.5 + 0.5) * w}px`;
+      el.style.top = `${(-v.y * 0.5 + 0.5) * h}px`;
+      el.style.zIndex = String(Math.round((1 - v.z) * 1000));   // nearer pins on top
+    });
+  }
+
+  function tick() {
+    viewer.rafId = requestAnimationFrame(tick);
+    controls.update();
+    if (viewer.tween) applyTween();
+    updatePins();
+    renderer.render(scene, camera);
+  }
+  tick();
+  return viewer;
+}
+
+async function mountStation(stationId) {
+  teardownAll();
+  const app = document.getElementById("app");
+  app.innerHTML = `
+    <div class="page-head" style="margin-bottom:12px;">
+      <p class="eyebrow">Station 3D View</p>
+      <h2 id="station-title">${stationId.charAt(0).toUpperCase() + stationId.slice(1)}</h2>
+    </div>
+    <div id="outside-strip-region"></div>
+    <div class="viewer-wrap big">
+      <div id="viewer-canvas-host"></div>
+      <div id="pin-layer"></div>
+      <div class="viewer-loading" id="viewer-loading">
+        <div id="viewer-loading-text">Loading 3D model&hellip;</div>
+        <div class="bar"><div id="load-bar"></div></div>
+      </div>
+      <div class="view-presets" id="view-presets">
+        <button data-view="top">TOP</button><button data-view="front">FRONT</button><button data-view="back">BACK</button>
+        <button data-view="left">LEFT</button><button data-view="right">RIGHT</button><button data-view="iso" class="active">ISO</button>
+      </div>
+      <div class="room-hover-panel" id="room-hover-panel"><div class="rhp-empty">Hover a pin to see that area's live status. Click a pin to open its full detail.</div></div>
+      <div class="auto-badge" id="auto-badge">⟳ Auto-rotating — drag to take control</div>
+      <button class="calib-toggle" id="calib-toggle">📍 Adjust pins</button>
+      <div class="calib-panel" id="calib-panel">
+        <select id="calib-room"></select>
+        <label>Left ↔ right <span></span></label><input type="range" id="calib-u" min="0" max="1" step="0.005">
+        <label>Front ↔ back <span></span></label><input type="range" id="calib-w" min="0" max="1" step="0.005">
+        <label>Height above model <span></span></label><input type="range" id="calib-l" min="0" max="0.5" step="0.005">
+        <button class="copy" id="calib-copy" style="margin-top:8px;">Copy positions as JSON</button>
+        <button class="copy" id="calib-reset">Reset to defaults</button>
+        <div class="hint">Drag the sliders to move that area's pin onto its building. Positions are saved in this browser automatically.</div>
+      </div>
+    </div>
+    <div class="legend-box">
+      <div class="grp">
+        <span class="grp-title">Pins</span>
+        <span class="item"><span class="dot nominal"></span>Nominal</span>
+        <span class="item"><span class="dot warning"></span>Warning</span>
+        <span class="item"><span class="dot critical"></span>Critical — blinks red with an alert popup</span>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("view-presets").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-view]");
+    if (btn) setView(btn.dataset.view);
+  });
+
+  const hostEl = document.getElementById("viewer-canvas-host");
+  const loadingEl = document.getElementById("viewer-loading");
+  try {
+    await initViewer(stationId, hostEl, (p) => {
+      const bar = document.getElementById("load-bar"); if (bar) bar.style.width = `${Math.round(p * 100)}%`;
+      const t = document.getElementById("viewer-loading-text"); if (t) t.textContent = `Loading 3D model… ${Math.round(p * 100)}%`;
+    });
+    buildPins(document.getElementById("pin-layer"), stationId);
+    setupCalibration(stationId);
+    setAutoRotate(true);
+    if (loadingEl) loadingEl.style.display = "none";
+  } catch (e) {
+    console.error("3D viewer failed to load", e);
+    const t = document.getElementById("viewer-loading-text");
+    if (t) t.textContent = "Couldn't load the 3D model — check your connection (and that models/*.glb is being served), then reload.";
+  }
+
+  refreshFn = () => patchStation(stationId);
+  await patchStation(stationId);
+}
+
+async function patchStation(stationId) {
+  let data;
+  try { data = await api(`/api/stations/${stationId}/rooms`); }
+  catch (e) {
+    const el = document.getElementById("outside-strip-region");
+    if (el) el.innerHTML = connectionErrorBanner();
+    return;
+  }
+  renderBreadcrumb({ view: "station", station: stationId }, data.display_name);
+  const titleEl = document.getElementById("station-title");
+  if (titleEl) titleEl.textContent = data.display_name;
+  const strip = document.getElementById("outside-strip-region");
+  if (strip) strip.innerHTML = renderOutsideStrip(data.outside);
+
+  if (viewer && viewer.stationId === stationId) {
+    viewer.roomStatus = {};
+    data.rooms.forEach(room => { viewer.roomStatus[room.id] = room; });
+    refreshPins();
+    if (viewer.hoveredRoomId) renderHoverPanel(viewer.hoveredRoomId);
+  }
+}
+
+// ---------------------------------------------------------------------
+// ROOM DETAIL
+// ---------------------------------------------------------------------
+function chartOptionsBase(dashed, color) {
+  return {
+    type: "line",
+    data: { labels: [], datasets: [{ data: [], borderColor: color, backgroundColor: "transparent", pointRadius: 0, borderWidth: 2, borderDash: dashed ? [5, 4] : [], tension: dashed ? 0.15 : 0, fill: false }] },
+    options: {
+      animation: false, responsive: true,
+      plugins: { legend: { display: false }, tooltip: { enabled: true } },
+      scales: {
+        x: { display: !dashed, grid: { display: false }, ticks: { font: { size: 10 }, maxTicksLimit: 5, color: "#74889b" } },
+        y: { grid: { color: "#e2edf5" }, ticks: { font: { size: 10 }, color: "#74889b" } },
+      },
+    },
+  };
+}
+
+const MODEL_LABELS = { kalman: "Kalman Filter", resource: "Resource-Balance Model" };
+function horizonPillsHtml(p, idPrefix) {
+  const horizons = ["7d", "30d", "90d"];
+  const horizonLabels = { "7d": "1 Week", "30d": "1 Month", "90d": "3 Months" };
+  return horizons.map(h => `
+    <div class="horizon-pill ${p.horizon_levels[h]}" id="${idPrefix}-${h}">
+      <div class="hk">${horizonLabels[h]}</div>
+      <div class="hv" id="${idPrefix}-v-${h}">${p.horizons[h]}${p.unit ? " " + p.unit : ""}</div>
+      <div class="hu" id="${idPrefix}-u-${h}">${p.uncertainty && p.uncertainty[h] ? "± " + p.uncertainty[h] + (p.unit || "") : ""}</div>
+    </div>
+  `).join("");
+}
+
+async function mountRoom(stationId, roomId) {
+  teardownAll();
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="loading">Loading room detail&hellip;</div>`;
+
+  let roomData, predictData;
+  try {
+    [roomData, predictData] = await Promise.all([
+      api(`/api/stations/${stationId}/rooms/${roomId}`),
+      api(`/api/stations/${stationId}/rooms/${roomId}/predict`),
+    ]);
+  } catch (e) { app.innerHTML = connectionErrorBanner(); return; }
+
+  renderBreadcrumb({ view: "room", station: stationId, room: roomId }, roomData.display_name, roomData.room.name);
+
+  const room = roomData.room;
+  const nonNumeric = room.components.filter(c => !c.numeric);
+
+  const cardsHtml = predictData.predictions.map((p, i) => {
+    return `
+      <div class="comp-card clickable" id="card-${i}" onclick="navigate('/station/${stationId}/room/${roomId}/metric/${p.key}')">
+        <div class="cc-head">
+          <span class="label">${p.label}</span>
+          <span class="status-badge ${p.current_level}" id="badge-${i}">${LEVEL_LABEL[p.current_level]}</span>
+        </div>
+        <div class="cc-value" id="value-${i}">${p.current}${p.unit ? " " + p.unit : ""}</div>
+        <div class="cc-narrative" id="narrative-${i}">${p.narrative}</div>
+        <div class="chart-row">
+          <div class="chart-box"><div class="ct-label">Recent Readings</div><canvas id="chart-recent-${i}"></canvas></div>
+          <div class="chart-box"><div class="ct-label">AI Projection &middot; next 90 days</div><canvas id="chart-proj-${i}"></canvas></div>
+        </div>
+        <div class="horizon-row" id="hrow-${i}">${horizonPillsHtml(p, `hp-${i}`)}</div>
+        <div class="cc-foot"><span class="model-tag" id="model-${i}">${MODEL_LABELS[p.model_key] || p.model_key}</span><span class="go">Full analysis &rarr;</span></div>
+      </div>
+    `;
+  }).join("");
+
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">Room Detail</p>
+      <h2>${room.icon} ${room.name}</h2>
+      <p class="sub" id="room-sub">${roomData.display_name} &middot; live readings and AI-projected outlook</p>
+    </div>
+    <div id="outside-strip-region">${renderOutsideStrip(roomData.outside)}</div>
+    <div id="chip-row-region">${nonNumeric.length ? `<div class="chip-row">${nonNumeric.map(c => `<span class="status-chip"><span class="dot ${c.level}"></span>${c.label}: ${fmtValue(c)}</span>`).join("")}</div>` : ""}</div>
+    ${predictData.predictions.length
+      ? `<div class="section-label">Predictive Outlook</div><div class="comp-grid">${cardsHtml}</div>`
+      : `<div class="banner">No numeric telemetry to chart for this room yet &mdash; check back once readings arrive.</div>`}
+  `;
+
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.color = "#74889b";
+
+  const subsystems = [...new Set(predictData.predictions.map(p => p.subsystem))];
+  const historyBySubsystem = {};
+  await Promise.all(subsystems.map(async sub => {
+    try { historyBySubsystem[sub] = (await api(`/api/stations/${stationId}/history/${sub}?limit=60`)).records; }
+    catch (e) { historyBySubsystem[sub] = []; }
+  }));
+
+  predictData.predictions.forEach((p, i) => {
+    const records = historyBySubsystem[p.subsystem] || [];
+    const recentValues = records.map(r => r[p.key]).filter(v => v !== null && v !== undefined);
+
+    const recentCtx = document.getElementById(`chart-recent-${i}`);
+    if (recentCtx) {
+      const cfg = chartOptionsBase(false, "#1e7fb8");
+      cfg.data.labels = recentValues.map((_, idx) => idx + 1);
+      cfg.data.datasets[0].data = recentValues;
+      cfg.data.datasets[0].backgroundColor = "rgba(30,127,184,0.10)";
+      cfg.data.datasets[0].fill = true;
+      cfg.options.scales.x.display = false;
+      activeCharts[`recent-${i}`] = new Chart(recentCtx, cfg);
+    }
+    const projCtx = document.getElementById(`chart-proj-${i}`);
+    if (projCtx) {
+      const color = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+      const cfg = chartOptionsBase(true, color);
+      cfg.data.labels = p.graph.map(pt => `${pt.day}d`);
+      cfg.data.datasets[0].data = p.graph.map(pt => pt.value);
+      activeCharts[`proj-${i}`] = new Chart(projCtx, cfg);
+    }
+  });
+
+  refreshFn = () => patchRoom(stationId, roomId, predictData.predictions.map(p => p.subsystem));
+}
+
+async function patchRoom(stationId, roomId, subsystems) {
+  let roomData, predictData;
+  try {
+    [roomData, predictData] = await Promise.all([
+      api(`/api/stations/${stationId}/rooms/${roomId}`),
+      api(`/api/stations/${stationId}/rooms/${roomId}/predict`),
+    ]);
+  } catch (e) { return; } // transient - keep showing last good data
+
+  const outsideEl = document.getElementById("outside-strip-region");
+  if (outsideEl) outsideEl.innerHTML = renderOutsideStrip(roomData.outside);
+
+  const nonNumeric = roomData.room.components.filter(c => !c.numeric);
+  const chipEl = document.getElementById("chip-row-region");
+  if (chipEl) chipEl.innerHTML = nonNumeric.length
+    ? `<div class="chip-row">${nonNumeric.map(c => `<span class="status-chip"><span class="dot ${c.level}"></span>${c.label}: ${fmtValue(c)}</span>`).join("")}</div>` : "";
+
+  const uniqueSubsystems = [...new Set(subsystems)];
+  const historyBySubsystem = {};
+  await Promise.all(uniqueSubsystems.map(async sub => {
+    try { historyBySubsystem[sub] = (await api(`/api/stations/${stationId}/history/${sub}?limit=60`)).records; }
+    catch (e) { historyBySubsystem[sub] = []; }
+  }));
+
+  predictData.predictions.forEach((p, i) => {
+    const valueEl = document.getElementById(`value-${i}`);
+    if (valueEl) valueEl.textContent = `${p.current}${p.unit ? " " + p.unit : ""}`;
+    const narrEl = document.getElementById(`narrative-${i}`);
+    if (narrEl) narrEl.textContent = p.narrative;
+    const badgeEl = document.getElementById(`badge-${i}`);
+    if (badgeEl) { badgeEl.className = `status-badge ${p.current_level}`; badgeEl.textContent = LEVEL_LABEL[p.current_level]; }
+
+    ["7d", "30d", "90d"].forEach(h => {
+      const pill = document.getElementById(`hp-${i}-${h}`);
+      const val = document.getElementById(`hp-${i}-v-${h}`);
+      const unc = document.getElementById(`hp-${i}-u-${h}`);
+      if (pill) pill.className = `horizon-pill ${p.horizon_levels[h]}`;
+      if (val) val.textContent = `${p.horizons[h]}${p.unit ? " " + p.unit : ""}`;
+      if (unc) unc.textContent = p.uncertainty && p.uncertainty[h] ? `± ${p.uncertainty[h]}${p.unit || ""}` : "";
+    });
+
+    const records = historyBySubsystem[p.subsystem] || [];
+    const recentValues = records.map(r => r[p.key]).filter(v => v !== null && v !== undefined);
+    const recentChart = activeCharts[`recent-${i}`];
+    if (recentChart) {
+      recentChart.data.labels = recentValues.map((_, idx) => idx + 1);
+      recentChart.data.datasets[0].data = recentValues;
+      recentChart.update("none");
+    }
+    const projChart = activeCharts[`proj-${i}`];
+    if (projChart) {
+      projChart.data.labels = p.graph.map(pt => `${pt.day}d`);
+      projChart.data.datasets[0].data = p.graph.map(pt => pt.value);
+      projChart.data.datasets[0].borderColor = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+      projChart.update("none");
+    }
+  });
+}
+
+// ---------------------------------------------------------------------
+// PAGE 4 - single-metric deep dive
+// ---------------------------------------------------------------------
+function analysisParagraphsHtml(text) {
+  return (text || "").split("\n\n").filter(Boolean).map(p => `<p>${p}</p>`).join("");
+}
+
+async function mountMetric(stationId, roomId, field) {
+  teardownAll();
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="loading">Loading metric detail&hellip;</div>`;
+
+  let data;
+  try { data = await api(`/api/stations/${stationId}/rooms/${roomId}/metric/${field}`); }
+  catch (e) { app.innerHTML = connectionErrorBanner(); return; }
+
+  const p = data.prediction;
+  renderBreadcrumb({ view: "metric", station: stationId, room: roomId, metric: field }, data.display_name, data.room_name, p.label);
+
+  app.innerHTML = `
+    <div class="page-head">
+      <p class="eyebrow">${data.room_icon} ${data.room_name} &middot; Metric Detail</p>
+      <h2>${p.label}</h2>
+    </div>
+    <div id="outside-strip-region">${renderOutsideStrip(data.outside)}</div>
+
+    <div class="metric-hero">
+      <div>
+        <div class="big-value" id="m-value">${p.current}${p.unit ? " " + p.unit : ""}</div>
+        <div class="sub-line" id="m-narrative">${p.narrative}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;">
+        <span class="status-badge ${p.current_level}" id="m-badge">${LEVEL_LABEL[p.current_level]}</span>
+        <span class="model-tag" id="m-model">${MODEL_LABELS[p.model_key] || p.model_key}</span>
+      </div>
+    </div>
+
+    <div class="metric-charts">
+      <div class="chart-box"><div class="ct-label">Recent Readings</div><div class="chart-frame"><canvas id="m-chart-recent"></canvas></div></div>
+      <div class="chart-box"><div class="ct-label">AI Projection &middot; next 90 days</div><div class="chart-frame"><canvas id="m-chart-proj"></canvas></div></div>
+    </div>
+
+    <div class="horizon-row large" id="m-horizons">${horizonPillsHtml(p, "m-hp")}</div>
+
+    <div class="detail-grid" id="m-details"></div>
+
+    <div class="analysis-card">
+      <h3>AI Engine Analysis</h3>
+      <div class="model-line" id="m-model-line">Model: ${MODEL_LABELS[p.model_key] || p.model_key} &middot; based on ${p.basis_points} days of history${p.anomaly_detected ? ' &middot; <span class="anom">⚠ anomaly flagged</span>' : ""}</div>
+      <div id="m-analysis">${analysisParagraphsHtml(p.analysis)}</div>
+    </div>
+  `;
+
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.color = "#74889b";
+  const recentValues = data.recent;
+  const recentCtx = document.getElementById("m-chart-recent");
+  if (recentCtx) {
+    const cfg = chartOptionsBase(false, "#1e7fb8");
+    cfg.data.labels = recentValues.map((_, idx) => idx + 1);
+    cfg.data.datasets[0].data = recentValues;
+    cfg.data.datasets[0].backgroundColor = "rgba(30,127,184,0.10)";
+    cfg.data.datasets[0].fill = true;
+    cfg.options.scales.x.display = false;
+    cfg.options.maintainAspectRatio = false;
+    activeCharts["m-recent"] = new Chart(recentCtx, cfg);
+  }
+  const projCtx = document.getElementById("m-chart-proj");
+  if (projCtx) {
+    const color = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+    const cfg = chartOptionsBase(true, color);
+    cfg.data.labels = p.graph.map(pt => `${pt.day}d`);
+    cfg.data.datasets[0].data = p.graph.map(pt => pt.value);
+    cfg.options.maintainAspectRatio = false;
+    activeCharts["m-proj"] = new Chart(projCtx, cfg);
+  }
+
+  renderMetricDetailTiles(p);
+  refreshFn = () => patchMetric(stationId, roomId, field);
+}
+
+function renderMetricDetailTiles(p) {
+  const host = document.getElementById("m-details");
+  if (!host) return;
+  const tiles = [
+    ["Daily rate", p.daily_rate != null ? `${p.daily_rate}${p.unit ? " " + p.unit : ""}/day` : (p.slope_per_day != null ? `${p.slope_per_day}${p.unit ? " " + p.unit : ""}/day` : "—")],
+    ["Depletion ETA", p.depletion_eta_days != null ? `${p.depletion_eta_days} days` : "—"],
+    ["Days to critical", p.days_to_critical != null ? `${p.days_to_critical} days` : "—"],
+    ["Next resupply", p.resupply_day != null ? `${p.resupply_day} days` : "—"],
+    ["Anomaly", p.anomaly_detected ? `Flagged (z=${p.anomaly_z})` : "None detected"],
+    ["Basis (history)", `${p.basis_points} days`],
+  ];
+  host.innerHTML = tiles.map(([k, v]) => `<div class="detail-tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("");
+}
+
+async function patchMetric(stationId, roomId, field) {
+  let data;
+  try { data = await api(`/api/stations/${stationId}/rooms/${roomId}/metric/${field}`); }
+  catch (e) { return; }
+  const p = data.prediction;
+
+  const strip = document.getElementById("outside-strip-region");
+  if (strip) strip.innerHTML = renderOutsideStrip(data.outside);
+  const val = document.getElementById("m-value"); if (val) val.textContent = `${p.current}${p.unit ? " " + p.unit : ""}`;
+  const narr = document.getElementById("m-narrative"); if (narr) narr.textContent = p.narrative;
+  const badge = document.getElementById("m-badge");
+  if (badge) { badge.className = `status-badge ${p.current_level}`; badge.textContent = LEVEL_LABEL[p.current_level]; }
+  const modelLine = document.getElementById("m-model-line");
+  if (modelLine) modelLine.innerHTML = `Model: ${MODEL_LABELS[p.model_key] || p.model_key} &middot; based on ${p.basis_points} days of history${p.anomaly_detected ? ' &middot; <span class="anom">⚠ anomaly flagged</span>' : ""}`;
+  const analysis = document.getElementById("m-analysis");
+  if (analysis) analysis.innerHTML = analysisParagraphsHtml(p.analysis);
+
+  ["7d", "30d", "90d"].forEach(h => {
+    const pill = document.getElementById(`m-hp-${h}`);
+    const v = document.getElementById(`m-hp-v-${h}`);
+    const u = document.getElementById(`m-hp-u-${h}`);
+    if (pill) pill.className = `horizon-pill ${p.horizon_levels[h]}`;
+    if (v) v.textContent = `${p.horizons[h]}${p.unit ? " " + p.unit : ""}`;
+    if (u) u.textContent = p.uncertainty && p.uncertainty[h] ? `± ${p.uncertainty[h]}${p.unit || ""}` : "";
+  });
+  renderMetricDetailTiles(p);
+
+  const recentChart = activeCharts["m-recent"];
+  if (recentChart) {
+    recentChart.data.labels = data.recent.map((_, idx) => idx + 1);
+    recentChart.data.datasets[0].data = data.recent;
+    recentChart.update("none");
+  }
+  const projChart = activeCharts["m-proj"];
+  if (projChart) {
+    projChart.data.labels = p.graph.map(pt => `${pt.day}d`);
+    projChart.data.datasets[0].data = p.graph.map(pt => pt.value);
+    projChart.data.datasets[0].borderColor = p.slope_per_day < 0 ? "#a86a06" : "#1c8f5e";
+    projChart.update("none");
+  }
+}
+
+// ---------------------------------------------------------------------
+// live push
+// ---------------------------------------------------------------------
+function connectWebSocket() {
+  const ws = new WebSocket(WS_URL);
+  const el = document.getElementById("conn");
+  const txt = document.getElementById("conn-text");
+  ws.onopen = () => { el.classList.add("live"); txt.textContent = "live"; };
+  ws.onclose = () => { el.classList.remove("live"); txt.textContent = "disconnected — retrying"; setTimeout(connectWebSocket, 2000); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = () => throttledRefresh();
+}
+
+window.addEventListener("hashchange", route);
+route();
+connectWebSocket();
+</script>
+</body>
+</html>
