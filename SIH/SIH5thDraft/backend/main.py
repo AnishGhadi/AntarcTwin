@@ -95,12 +95,13 @@ def on_mqtt_message(client, userdata, msg):
 
 
 def start_mqtt_client():
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="fastapi-backend")
-    client.on_message = on_mqtt_message
-    client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
-    client.subscribe("station/+/+")
-    client.loop_start()
-    return client
+    try:
+        client.connect(MQTT_HOST, MQTT_PORT, keepalive=60)
+        client.loop_start()
+        print(f"Connected to MQTT broker at {MQTT_HOST}:{MQTT_PORT}")
+    except Exception as e:
+        print(f"MQTT broker unavailable: {e}")
+        print("Starting backend without MQTT.")
 
 
 async def broadcast_state():
